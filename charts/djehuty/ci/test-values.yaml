@@ -1,0 +1,17 @@
+# Chart-testing input for `ct install` (kind cluster on CI).
+#
+# The chart defaults assume a production deployment: `production: "1"`
+# makes djehuty fatal-exit when no email server is configured. Tests
+# need a deployable shape, not a production-ready one — flip
+# production off and rely on the chart's own defaults for the rest
+# (bundled virtuoso, in-pod --initialize, port-forward access).
+#
+# Convention: ct iterates over every `ci/*-values.yaml` in the chart
+# and runs one `helm install` per file. Keep these minimal — they
+# only need to make the deployment reach Ready.
+
+config:
+  production: "0"
+  # Verbose logging is useful when CI hits a regression — keep it on
+  # for the kind-cluster install, not for the staging/prod examples.
+  debug-mode: "1"

@@ -1,0 +1,68 @@
+image:
+  repository: openlink/virtuoso-opensource-7
+  # -- Image tag. When empty, falls back to `.Chart.AppVersion` (currently
+  # 7.2.17). Override here to pin a different upstream Virtuoso version.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# -- Override the generated name (`<release>-virtuoso`). Useful when this
+# chart is a subchart and the parent needs a stable service name to point at.
+fullnameOverride: ""
+nameOverride: ""
+
+# -- Pod-level securityContext. runAsUser/fsGroup are left unset so
+# OpenShift's SCC can assign them from the namespace's range.
+# `supplementalGroups: [1001]` is required: the upstream
+# openlink/virtuoso-opensource-7 image ships `/opt/virtuoso-opensource/`
+# as mode 750 owned by `virtuoso:1001`. Without GID 1001 in the pod's
+# group set, the SCC-assigned UID falls under "other" and cannot read
+# `installer/virtuoso.ini.sample` — the image's entrypoint then fails
+# with `cp: cannot stat ... Permission denied`.
+podSecurityContext:
+  supplementalGroups: [1001]
+
+# -- Container-level securityContext. Empty by default for the same reason.
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 8890
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""
+
+# -- DBA password. CHANGE THIS for anything beyond a throwaway test cluster.
+# Ignored when `existingSecret` is set.
+dbaPassword: "dba"
+
+# -- Use an existing Kubernetes Secret instead of rendering one from
+# `dbaPassword`. The Secret must already exist in the release namespace and
+# contain the DBA password at `existingSecretKey`. Recommended when using
+# sealed-secrets, external-secrets-operator, vault-injector, etc.
+existingSecret: ""
+existingSecretKey: "DBA_PASSWORD"
+
+# -- Init scripts mounted at /opt/virtuoso-opensource/initdb.d. Map of
+# filename → contents; the official Virtuoso image runs every `*.sql` and
+# `*.sh` here on first boot (idempotency is the script's responsibility).
+# Used by parent charts (e.g. djehuty) to provision SPARQL permissions.
+initScripts: {}
+  # 001-example.sql: |
+  #   DB.DBA.RDF_DEFAULT_USER_PERMS_SET ('nobody', 7);
+
+# -- Native checkpoint restore at pod startup. Idempotent and a no-op
+# without an operator-placed marker — safe to leave enabled.
+# Operator flow (see chart README for the full procedure):
+#   kubectl exec $VIRT_POD -- mkdir -p /database/restore
+#   kubectl cp ./backups $NS/$VIRT_POD:/database/restore  # *.bp file(s)
+#   kubectl exec $VIRT_POD -- touch /database/restore/.pending
+#   kubectl delete pod $VIRT_POD                          # restart triggers restore
+restore:
+  enabled: true
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
