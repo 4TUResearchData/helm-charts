@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "virtuoso.fullname" . }}
+  labels: {{- include "virtuoso.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # PVC is ReadWriteOnce.
+  selector:
+    matchLabels: {{- include "virtuoso.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "virtuoso.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.restore.enabled }}
+      # Native Virtuoso checkpoint restore. No-op unless an operator has
+      # placed .bp file(s) in /database/restore/ and touched the marker
+      # /database/restore/.pending — see chart README for the operator flow.
+      initContainers:
+        - name: restore
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              RESTORE_DIR=/database/restore
+              DB_DIR=/database
+              MARKER="$RESTORE_DIR/.pending"
+              if [ ! -f "$MARKER" ]; then
+                echo "[restore] no pending marker; skipping"
+                exit 0
+              fi
+              BACKUP_FILE=$(ls "$RESTORE_DIR"/*.bp 2>/dev/null | head -1)
+              if [ -z "$BACKUP_FILE" ]; then
+                echo "[restore] ERROR: marker present but no .bp file in $RESTORE_DIR"
+                exit 1
+              fi
+              # backups look like prefix#1.bp prefix#2.bp …; strip trailing digits + .bp
+              PREFIX=$(basename "$BACKUP_FILE" .bp | sed 's/[0-9]*$//')
+              echo "[restore] backup prefix: $PREFIX"
+              # Ensure files copied in are readable by the assigned UID.
+              chmod -R a+r "$RESTORE_DIR" || true
+              # Wipe live db files; keep virtuoso.ini and the restore dir.
+              cd "$DB_DIR"
+              rm -f virtuoso.db virtuoso.lck virtuoso.log virtuoso.pxa virtuoso.trx \
+                    virtuoso-temp.db virtuoso-temp.trx
+              # Move .bp files next to virtuoso.ini. virtuoso-t +restore-backup
+              # looks for backup files in CWD; the image's ini also has paths
+              # like `../database/...` which only resolve when CWD is /database.
+              mv "$RESTORE_DIR"/*.bp "$DB_DIR"/
+              /opt/virtuoso-opensource/bin/virtuoso-t \
+                +configfile "$DB_DIR/virtuoso.ini" \
+                +restore-backup "$PREFIX"
+              # Tidy up: remove the now-restored .bp files and the marker.
+              rm -f "$DB_DIR"/*.bp
+              rm -f "$MARKER"
+              echo "[restore] complete"
+          volumeMounts:
+            - name: data
+              mountPath: /database
+      {{- end }}
+      containers:
+        - name: virtuoso
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: DBA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "virtuoso.secretName" . }}
+                  key: {{ include "virtuoso.dbaPasswordKey" . }}
+          ports:
+            - name: sparql
+              containerPort: 8890
+          readinessProbe:
+            tcpSocket: { port: sparql }
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: sparql }
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          {{- with .Values.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /database
+            {{- if .Values.initScripts }}
+            - name: initdb
+              mountPath: /opt/virtuoso-opensource/initdb.d
+              readOnly: true
+            {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "virtuoso.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if .Values.initScripts }}
+        - name: initdb
+          configMap:
+            name: {{ include "virtuoso.fullname" . }}-init
+        {{- end }}

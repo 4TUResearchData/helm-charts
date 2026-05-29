@@ -1,0 +1,6 @@
+dependencies:
+- name: virtuoso
+  repository: file://../virtuoso
+  version: 0.1.0-dev.1
+digest: sha256:aebc3ec806d01f7471b34700a7a13d5dfe2ebd8be0cfbc65fb8d140e086d1ad0
+generated: "2026-05-30T13:55:21.954171+02:00"

@@ -1,0 +1,41 @@
+{{- if .Values.ingress.enabled }}
+{{- /* Merge user annotations with cert-manager annotations when enabled. */ -}}
+{{- $annotations := deepCopy (default (dict) .Values.ingress.annotations) -}}
+{{- if .Values.ingress.certManager.enabled -}}
+  {{- if .Values.ingress.certManager.clusterIssuer -}}
+    {{- $_ := set $annotations "cert-manager.io/cluster-issuer" .Values.ingress.certManager.clusterIssuer -}}
+  {{- else if .Values.ingress.certManager.issuer -}}
+    {{- $_ := set $annotations "cert-manager.io/issuer" .Values.ingress.certManager.issuer -}}
+  {{- end -}}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "djehuty.fullname" . }}
+  labels: {{- include "djehuty.labels" . | nindent 4 }}
+  {{- with $annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ include "djehuty.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
