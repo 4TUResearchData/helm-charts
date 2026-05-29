@@ -1,0 +1,60 @@
+{{- if .Values.route.enabled }}
+{{- /* Merge user annotations with cert-manager annotations when enabled. */ -}}
+{{- $annotations := deepCopy (default (dict) .Values.route.annotations) -}}
+{{- if and .Values.route.tls.enabled .Values.route.tls.certManager.enabled -}}
+  {{- if .Values.route.tls.certManager.clusterIssuer -}}
+    {{- $_ := set $annotations "cert-manager.io/cluster-issuer" .Values.route.tls.certManager.clusterIssuer -}}
+  {{- else if .Values.route.tls.certManager.issuer -}}
+    {{- $_ := set $annotations "cert-manager.io/issuer-name" .Values.route.tls.certManager.issuer -}}
+  {{- end -}}
+{{- end }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "djehuty.fullname" . }}
+  labels: {{- include "djehuty.labels" . | nindent 4 }}
+  {{- with $annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.route.host }}
+  host: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.route.path }}
+  path: {{ . | quote }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "djehuty.fullname" . }}
+    weight: 100
+  port:
+    targetPort: http
+  {{- if .Values.route.tls.enabled }}
+  tls:
+    termination: {{ .Values.route.tls.termination }}
+    {{- with .Values.route.tls.insecureEdgeTerminationPolicy }}
+    insecureEdgeTerminationPolicy: {{ . }}
+    {{- end }}
+    {{- /* When cert-manager is on, leave cert/key/CA empty — cert-manager
+           populates them. Setting them via helm would clobber that. */ -}}
+    {{- if not .Values.route.tls.certManager.enabled }}
+    {{- with .Values.route.tls.certificate }}
+    certificate: |-
+      {{- . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.route.tls.key }}
+    key: |-
+      {{- . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.route.tls.caCertificate }}
+    caCertificate: |-
+      {{- . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.route.tls.destinationCACertificate }}
+    destinationCACertificate: |-
+      {{- . | nindent 6 }}
+    {{- end }}
+    {{- end }}
+  {{- end }}
+  wildcardPolicy: None
+{{- end }}

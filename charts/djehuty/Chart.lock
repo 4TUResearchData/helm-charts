@@ -1,0 +1,6 @@
+dependencies:
+- name: virtuoso
+  repository: https://4turesearchdata.github.io/helm-charts
+  version: 0.1.0-dev
+digest: sha256:133d52a431ec7717667c716660990947d682b8c869d5cf2de8620955d15de734
+generated: "2026-05-30T08:51:17.798917+02:00"

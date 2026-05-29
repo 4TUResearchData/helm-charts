@@ -1,0 +1,189 @@
+# -- djehuty image. For local testing, build from this branch and override:
+#    docker build -t djehuty:dev -f docker/Dockerfile .
+#    helm install ... --set image.repository=djehuty --set image.tag=dev \
+#                     --set image.pullPolicy=Never
+image:
+  repository: ghcr.io/4turesearchdata/djehuty
+  # -- Image tag. When empty, falls back to `.Chart.AppVersion` (currently
+  # "26.2"). Override here to pin a different upstream djehuty version.
+  tag: "dev"
+  pullPolicy: IfNotPresent
+
+# -- Number of djehuty replicas. Keep at 1 for now: djehuty stores cache on
+# the data PVC and that PVC is ReadWriteOnce by default.
+replicaCount: 1
+
+# -- Pod-level securityContext. Empty by default so OpenShift's SCC can
+# assign runAsUser/fsGroup from the namespace's range. For non-OpenShift
+# clusters you can harden, e.g.:
+#   runAsNonRoot: true
+#   runAsUser: 7001
+#   fsGroup: 7001
+podSecurityContext: {}
+
+# -- Container-level securityContext. Empty by default for the same reason.
+# Reasonable hardening for non-OpenShift clusters:
+#   allowPrivilegeEscalation: false
+#   readOnlyRootFilesystem: false   # djehuty writes logs / venv state
+#   capabilities: { drop: ["ALL"] }
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# -- Ingress for exposing djehuty outside the cluster.
+# Disabled by default — use `kubectl port-forward` for local testing.
+ingress:
+  enabled: false
+  className: "nginx"             # e.g. "nginx", "traefik"
+  annotations: {}
+    # nginx.ingress.kubernetes.io/proxy-body-size: "5g"   # large uploads
+  hosts:
+    - host: djehuty.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+    # - secretName: djehuty-tls
+    #   hosts:
+    #     - djehuty.example.com
+  # -- cert-manager integration. When enabled, the right annotation is added
+  # to the Ingress so cert-manager provisions the cert into the Secret named
+  # by `ingress.tls[].secretName` (you still need to define `ingress.tls`).
+  # Set EITHER clusterIssuer (cluster-scoped) OR issuer (namespaced).
+  certManager:
+    enabled: false
+    clusterIssuer: ""    # e.g. "letsencrypt-prod"
+    issuer: ""           # e.g. "internal-ca" (in this namespace)
+
+# -- OpenShift Route (native equivalent of Ingress). Use this on OpenShift
+# clusters whose router doesn't auto-translate Ingress objects.
+# Don't enable both `ingress` and `route` unless you really mean it.
+route:
+  enabled: false
+  # -- Hostname. If empty, OpenShift auto-assigns one under the cluster's
+  # default app domain (e.g. djehuty-<ns>.apps.<cluster>.example).
+  host: ""
+  path: ""
+  annotations: {}
+    # haproxy.router.openshift.io/timeout: 60s
+    # haproxy.router.openshift.io/balance: roundrobin
+  tls:
+    enabled: true
+    # edge: TLS terminated at the router (default-signed cert from the
+    #   router's CA — fine for staging).
+    # reencrypt: re-encrypts to a TLS backend (requires destinationCACertificate).
+    # passthrough: opaque TCP through to the pod's own TLS.
+    termination: edge
+    # Redirect | Allow | None
+    insecureEdgeTerminationPolicy: Redirect
+    # Provide your own cert/key/CA for `edge` or `reencrypt`. Leave empty
+    # to use the router's default certificate. Ignored when certManager is enabled.
+    certificate: ""
+    key: ""
+    caCertificate: ""
+    destinationCACertificate: ""
+    # -- cert-manager integration (requires the cert-manager openshift-routes
+    # controller in the cluster — ask your admins). When enabled, cert-manager
+    # provisions the cert for `route.host` and populates the Route's TLS
+    # fields. Set EITHER clusterIssuer (cluster-scoped) OR issuer (namespaced).
+    certManager:
+      enabled: false
+      clusterIssuer: ""    # e.g. "letsencrypt-prod"
+      issuer: ""           # e.g. "internal-ca" (in this namespace)
+
+# -- Persistent volume for djehuty's /data (cache, storage-root).
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClass: ""
+
+# -- Non-sensitive configuration. Rendered into a ConfigMap and mounted at
+# /etc/djehuty/config.json. Sensitive values use ${env:NAME} or ${file:/path}
+# references that the JSON parser resolves at startup (see `.secrets`).
+config:
+  site-name: "Djehuty (helm)"
+  site-shorttag: "helm"
+  bind-address: "0.0.0.0"
+  port: "8080"
+  # -- Public URL. Leave empty to auto-derive: from ingress.hosts[0] when
+  # ingress is enabled (https:// if ingress.tls is set, else http://), or
+  # http://localhost:<service.port> otherwise.
+  base-url: ""
+  storage-root: "/data"
+  cache-root:
+    clear-on-start: "1"
+    "#text": "/data/cache"
+  live-reload: "0"
+  debug-mode: "0"
+  production: "1"
+  disable-2fa: "1"
+  authentication:
+    orcid:
+      client-id: ""
+      client-secret: "${env:ORCID_CLIENT_SECRET}"
+      endpoint: "https://orcid.org/oauth"
+
+# -- Secrets rendered into a Kubernetes Secret and exposed as env vars
+# (short values) and/or file mounts (multi-line: PEMs, certs).
+secrets:
+  # -- Use an existing Kubernetes Secret instead of rendering one from
+  # `env` / `files` below. Recommended when using sealed-secrets,
+  # external-secrets-operator, vault-injector, etc. The Secret must
+  # already exist in the release namespace and contain:
+  #   - one key per `${env:NAME}` reference in `config` (same key names
+  #     as listed under `secrets.env` below — values there are ignored)
+  #   - one filename per `${file:/etc/djehuty/secrets/<filename>}`
+  #     reference in `config` (filenames as listed under `secrets.files`
+  #     — contents are ignored)
+  # When set, `env` and `files` act as a *declaration* of the keys/files
+  # the chart will wire into the pod from your existing Secret.
+  existingSecret: ""
+
+  env:
+    # Map of ENV_NAME → value. Referenced from `config` via ${env:NAME}.
+    # When `existingSecret` is set, values here are ignored — only the
+    # key names matter (they're what the pod's env vars get bound to).
+    ORCID_CLIENT_SECRET: ""
+  files: {}
+    # Map of fileName → contents. Mounted at /etc/djehuty/secrets/<fileName>.
+    # Reference from config via "${file:/etc/djehuty/secrets/<fileName>}".
+    # When `existingSecret` is set, contents here are ignored.
+    # Example:
+    # repo-key.pem: |
+    #   -----BEGIN PRIVATE KEY-----
+    #   ...
+    #   -----END PRIVATE KEY-----
+
+# -- Run `djehuty web --initialize` via an initContainer on first install.
+# Idempotent: skipped if /data/.initialized marker exists.
+initialize: true
+
+# -- RDF store configuration. djehuty needs a SPARQL endpoint to write to.
+# When `virtuoso.enabled` is true, sparql-uri/sparql-update-uri are
+# auto-derived from the bundled virtuoso subchart's Service. When false,
+# you must set them explicitly to point at your external SPARQL store.
+rdfStore:
+  stateGraph: "djehuty://local"
+  sparqlUri: ""        # e.g. "http://my-virtuoso.sparql:8890/sparql"
+  sparqlUpdateUri: ""  # usually the same URL as sparqlUri
+
+# -- Bundled Virtuoso subchart (charts/virtuoso). Disable to use an
+# externally-managed SPARQL store via `rdfStore` above. Anything under
+# `virtuoso.*` is passed straight to the virtuoso subchart — see its
+# values.yaml for the full schema. The fields below are the most common
+# overrides; the rest fall back to virtuoso's defaults.
+virtuoso:
+  enabled: true
+  # -- DBA password. CHANGE THIS for anything beyond a throwaway test cluster.
+  dbaPassword: "dba"
+  # -- Pre-loaded SPARQL permissions so djehuty can issue updates against
+  # the bundled Virtuoso. Runs once on the first pod start.
+  initScripts:
+    001-djehuty-permissions.sql: |
+      DB.DBA.RDF_DEFAULT_USER_PERMS_SET ('nobody', 7);
+      DB.DBA.RDF_DEFAULT_USER_PERMS_SET ('SPARQL', 7);
+      GRANT SPARQL_UPDATE TO "SPARQL";
+      GRANT EXECUTE ON "DB.DBA.SPARQL_INSERT_DICT_CONTENT" TO "SPARQL";
+      GRANT EXECUTE ON "DB.DBA.L_O_LOOK" TO "SPARQL";

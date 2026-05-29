@@ -1,0 +1,27 @@
+apiVersion: v2
+name: djehuty
+description: Djehuty research-data repository (4TU.ResearchData) — pre-release, under active development
+type: application
+version: 0.1.0-dev
+appVersion: "26.2"
+annotations:
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/maturity: alpha
+home: https://github.com/4TUResearchData/helm-charts/tree/main/charts/djehuty
+sources:
+  - https://github.com/4TUResearchData/djehuty
+  - https://github.com/4TUResearchData/helm-charts
+keywords:
+  - research-data
+  - repository
+  - djehuty
+  - 4tu
+maintainers:
+  - name: 4TU.ResearchData
+    url: https://github.com/4TUResearchData
+icon: https://data.4tu.nl/static/images/logo-4tu-research-data.svg
+dependencies:
+  - name: virtuoso
+    version: "0.1.0-dev"
+    repository: "https://4turesearchdata.github.io/helm-charts"
+    condition: virtuoso.enabled

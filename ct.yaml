@@ -1,0 +1,6 @@
+chart-dirs:
+  - charts
+chart-repos: []
+helm-extra-args: --timeout 600s
+validate-maintainers: true
+check-version-increment: true

@@ -1,0 +1,20 @@
+# Helm
+*.tgz
+.cr-release-packages/
+.cr-index/
+charts/*/charts/
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*.bak
+*.tmp
+*.tmproj
+
+# Local secrets / overrides
+*.local.yaml
+*-secrets.yaml
+.env
+.env.*

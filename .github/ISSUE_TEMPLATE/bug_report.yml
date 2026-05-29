@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a problem with one of the charts
+labels: [bug]
+body:
+  - type: dropdown
+    id: chart
+    attributes:
+      label: Chart
+      description: Which chart is affected?
+      options:
+        - djehuty
+        - virtuoso
+        - other / not chart-specific
+    validations:
+      required: true
+
+  - type: input
+    id: chart-version
+    attributes:
+      label: Chart version
+      placeholder: "e.g. 0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: helm-version
+    attributes:
+      label: Helm version
+      placeholder: "output of `helm version --short`"
+    validations:
+      required: true
+
+  - type: input
+    id: kube-version
+    attributes:
+      label: Kubernetes / OpenShift version
+      placeholder: "output of `kubectl version --short` or `oc version`"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug. Include rendered manifests, error output, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: |
+        Minimal `values.yaml` overrides and `helm` command(s) that reproduce the problem.
+      render: shell
+    validations:
+      required: true
