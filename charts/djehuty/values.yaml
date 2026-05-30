@@ -130,6 +130,31 @@ config:
       client-secret: "${env:ORCID_CLIENT_SECRET}"
       endpoint: "https://orcid.org/oauth"
 
+  # -- Side-loaded config fragments. Each entry mounts an existing
+  # ConfigMap or Secret from the release namespace under
+  # `/etc/djehuty/config.d/<refName>/` and emits an `include:` entry per
+  # listed key into the rendered config.json. djehuty's config loader
+  # (`src/djehuty/web/ui.py:935`) walks every `<include>` it finds and
+  # merges the referenced file into the running config — same semantics
+  # as the bare-VM XML `<include>...</include>` directive.
+  #
+  # Use this for data that lives outside the chart release cycle:
+  # operator-managed quotas/privileges (regenerated nightly), branding
+  # snippets, menu definitions. The chart does NOT create the referenced
+  # ConfigMap/Secret — manage those out-of-band (`kubectl apply -f`,
+  # external-secrets-operator, sealed-secrets, etc.).
+  #
+  # `keys` is required and explicit so the chart can render fully at
+  # template time (no `lookup` magic, no cluster round-trip). Each key
+  # becomes one file mount and one `include:` entry, in list order.
+  includes: []
+    # - configMap: djehuty-quotas
+    #   keys: ["quotas.json"]
+    # - configMap: djehuty-privileges
+    #   keys: ["privileges.json"]
+    # - secret: djehuty-branding
+    #   keys: ["branding.json", "menu.json"]
+
 # -- Secrets rendered into a Kubernetes Secret and exposed as env vars
 # (short values) and/or file mounts (multi-line: PEMs, certs).
 secrets:

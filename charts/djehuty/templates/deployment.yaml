@@ -71,6 +71,14 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
+            {{- /* Side-loaded config fragments (config.includes[]). One mount per
+                   reference, under /etc/djehuty/config.d/<refName>/. djehuty's
+                   loader walks `include:` entries in the rendered config.json. */}}
+            {{- range $idx, $inc := default (list) .Values.config.includes }}
+            - name: {{ printf "config-include-%d" $idx }}
+              mountPath: /etc/djehuty/config.d/{{ default $inc.secret $inc.configMap }}
+              readOnly: true
+            {{- end }}
       {{- if .Values.virtuoso.enabled }}
       initContainers:
         - name: wait-for-virtuoso
@@ -94,3 +102,23 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- range $idx, $inc := default (list) .Values.config.includes }}
+        - name: {{ printf "config-include-%d" $idx }}
+          {{- if $inc.configMap }}
+          configMap:
+            name: {{ $inc.configMap }}
+            items:
+              {{- range $k := $inc.keys }}
+              - key: {{ $k | quote }}
+                path: {{ $k | quote }}
+              {{- end }}
+          {{- else }}
+          secret:
+            secretName: {{ $inc.secret }}
+            items:
+              {{- range $k := $inc.keys }}
+              - key: {{ $k | quote }}
+                path: {{ $k | quote }}
+              {{- end }}
+          {{- end }}
+        {{- end }}

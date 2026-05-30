@@ -64,6 +64,63 @@ Features:
    open http://localhost:8080
    ```
 
+## Side-loaded config fragments
+
+djehuty's bare-VM config supports `<include>...</include>` directives that
+pull additional XML files into the running configuration. The chart's
+equivalent is `config.includes:` — a list of references to existing
+ConfigMaps or Secrets in the release namespace. Each entry mounts the
+referenced resource under `/etc/djehuty/config.d/<refName>/` and emits one
+`include:` entry per listed key into the rendered `config.json`; djehuty
+walks those entries at startup and merges the referenced files into the
+running config.
+
+Use this for data that changes outside chart releases — operator-managed
+quotas/privileges (often regenerated nightly), branding snippets, menu
+fragments — so the values file stays static.
+
+```yaml
+config:
+  includes:
+    - configMap: djehuty-quotas       # mounted at /etc/djehuty/config.d/djehuty-quotas/
+      keys: ["quotas.json"]           # required: explicit list of keys to project
+    - configMap: djehuty-privileges
+      keys: ["privileges.json"]
+    - secret: djehuty-branding        # `secret:` instead of `configMap:` for sensitive fragments
+      keys: ["branding.json", "menu.json"]
+```
+
+Each referenced file should be valid djehuty JSON config (same shape as
+the chart's rendered `config.json`, just the subtree you want to merge).
+Example `quotas.json`:
+
+```json
+{
+  "djehuty": {
+    "quotas": {
+      "default": "5000000000",
+      "account": [
+        { "email": "user@example.org", "#text": "21474836480" }
+      ]
+    }
+  }
+}
+```
+
+Notes:
+
+- **The chart does not create the referenced ConfigMap/Secret.** Manage
+  them out-of-band (`kubectl apply -f`, sealed-secrets,
+  external-secrets-operator, an operator-side nightly export job, etc.).
+- `keys:` is required and explicit so the chart renders fully at
+  template time — no cluster round-trip via Helm `lookup`. Each key
+  becomes one file mount and one `include:` entry, in list order.
+- Set either `configMap:` or `secret:`, not both. Set at least one.
+- Rotation: bump the data inside the ConfigMap/Secret, then
+  `kubectl rollout restart deployment/<release>-djehuty`. The deployment's
+  `checksum/config` annotation tracks chart-rendered config only, not
+  side-loaded fragments.
+
 ## Disable bundled Virtuoso
 
 If you already run a SPARQL store elsewhere, disable the subchart and
