@@ -130,6 +130,51 @@ config:
       client-secret: "${env:ORCID_CLIENT_SECRET}"
       endpoint: "https://orcid.org/oauth"
 
+    # -- SAML 2.0 SSO via SURFconext (or any SAML IdP). The shape mirrors
+    # djehuty's XML config: a `service-provider:` block describing this
+    # deployment (cert/key referenced via ${file:...}, metadata with
+    # organization + contact list) and an `identity-provider:` block for
+    # the upstream IdP (entity-id, x509 cert, single-sign-on binding).
+    # Uncomment + adapt; the SP cert/key live in the Secret as files,
+    # not values.yaml.
+    # saml:
+    #   version: "2.0"
+    #   strict: "1"
+    #   debug: "0"
+    #   service-provider:
+    #     x509-certificate: "${file:/etc/djehuty/secrets/saml-sp-cert.pem}"
+    #     private-key: "${file:/etc/djehuty/secrets/saml-sp-key.pem}"
+    #     metadata:
+    #       display-name: "Your repository"
+    #       url: "https://data.example.org"
+    #       description: "Public-facing description shown in IdP discovery UIs."
+    #       logo: ""
+    #       organization:
+    #         name: "Your Organization"
+    #         url: "https://example.org"
+    #       # contact[] is a repeated <contact type="..."> in XML; the `type`
+    #       # key on each entry becomes the XML attribute.
+    #       contact:
+    #         - type: "support"
+    #           first-name: "Repository"
+    #           last-name: "Support"
+    #           email: "support@example.org"
+    #         - type: "administrative"
+    #           first-name: "Repository"
+    #           last-name: "Admin"
+    #           email: "admin@example.org"
+    #         - type: "technical"
+    #           first-name: "Tech"
+    #           last-name: "Lead"
+    #           email: "tech@example.org"
+    #   identity-provider:
+    #     entity-id: "https://engine.surfconext.nl/authentication/idp/metadata"
+    #     # IdP cert is typically public; safe to inline as a single-line base64.
+    #     x509-certificate: "MIIE5z...=="
+    #     single-signon-service:
+    #       url: "https://engine.surfconext.nl/authentication/idp/single-sign-on/key:20230503"
+    #       binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+
   # -- Side-loaded config fragments. Each entry mounts an existing
   # ConfigMap or Secret from the release namespace under
   # `/etc/djehuty/config.d/<refName>/` and emits an `include:` entry per

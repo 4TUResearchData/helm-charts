@@ -32,6 +32,14 @@ Features:
 - `config.base-url` auto-derives from the enabled Route or Ingress
   (https when TLS is configured) — one less knob.
 
+## Reference deployments
+
+Three complete `-f` values files cover the shapes you'll actually
+encounter: [`examples/local-dev/`](./examples/local-dev/values.yaml),
+[`examples/staging/`](./examples/staging/values.yaml), and
+[`examples/production-external-secrets/`](./examples/production-external-secrets/values.yaml).
+See [`examples/README.md`](./examples/README.md) for which to pick.
+
 ## Test against this branch
 
 1. Build a local djehuty image from the current source tree:
@@ -134,6 +142,50 @@ point djehuty at it:
 
 (`rdfStore.sparqlUpdateUri` defaults to `sparqlUri` when omitted.)
 
+## Authoring config
+
+Everything under `config:` in values.yaml is serialized to JSON and
+shipped as `/etc/djehuty/config.json`. djehuty's JSON parser
+(`src/djehuty/web/config/json_parser.py`) wraps each dict into a node
+that exposes both attribute-style and child-element-style access — the
+same shape its XML parser sees — so the mapping from XML to JSON is
+mechanical.
+
+Four shapes cover essentially everything in a real config:
+
+| XML                                                           | values.yaml under `config:`                                                                                       |
+|---------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
+| `<port>8080</port>`                                           | `port: "8080"`                                                                                                    |
+| `<production pre-production="1">1</production>`               | `production: { pre-production: "1", "#text": "1" }`                                                               |
+| `<colors><primary-color>#e1670b</primary-color></colors>`     | `colors: { primary-color: "#e1670b" }`                                                                            |
+| `<account email="x@y.org">5000000000</account>` (repeated)    | `account: [ { email: "x@y.org", "#text": "5000000000" }, ... ]`                                                   |
+
+Rules:
+
+- **`#text`** is the element body. Use it whenever an element has both
+  attributes and a text value (`<el attr="...">body</el>`).
+- **Plain scalar keys** under a dict become both XML attributes *and*
+  child elements with that key as the tag. So `pre-production: "1"`
+  inside `production:` shows up as `<production pre-production="1">` for
+  attribute reads and as `<production><pre-production>1</pre-production></production>`
+  for child-element reads. Practical effect: you can almost always write
+  scalar keys directly without the `@` prefix or `#text` mechanics.
+- **`@`-prefixed keys** (e.g. `"@email": "x@y.org"`) are the explicit
+  attribute form. Kept for back-compat; prefer the plain-scalar form
+  above unless the same key needs to coexist with a non-attribute child.
+- **YAML lists** under a key (`account: [ {...}, {...} ]`) become
+  repeated child elements with that key as the tag — one per list entry.
+
+The chart's defaults already use this convention
+(`cache-root: { clear-on-start: "1", "#text": "/data/cache" }` →
+`<cache-root clear-on-start="1">/data/cache</cache-root>`). Verified
+end-to-end against `json_parser.py`.
+
+> [!NOTE]
+> XML config (`config-file foo.xml`) is **deprecated upstream** —
+> djehuty will remove XML support in December 2026. This chart only
+> emits JSON, so nothing to do.
+
 ## Secrets
 
 Short-string secrets go in `secrets.env` and are referenced from `config` via
@@ -163,6 +215,41 @@ config:
 
 For production, prefer external secret management (sealed-secrets,
 external-secrets-operator, etc.) over committing values into `values.yaml`.
+
+### Where files end up in the pod
+
+The chart mounts the secret (rendered or existing) at
+`/etc/djehuty/secrets/`, read-only. **Each key in the Secret becomes a
+file at `/etc/djehuty/secrets/<key>`** — that's the path you reference
+with `${file:/etc/djehuty/secrets/<key>}` from `config`. The mapping is:
+
+| values.yaml                                         | Secret key            | Pod path                                       |
+|-----------------------------------------------------|-----------------------|------------------------------------------------|
+| `secrets.files.saml-sp-cert.pem`                    | `saml-sp-cert.pem`    | `/etc/djehuty/secrets/saml-sp-cert.pem`        |
+| `secrets.env.ORCID_CLIENT_SECRET`                   | `ORCID_CLIENT_SECRET` | (env var, not a file)                          |
+
+When `secrets.existingSecret` is set the chart doesn't rewrite key names
+— your Secret's keys are used as filenames verbatim. So if your
+out-of-band Secret has a key named `saml-sp-cert.pem`, it shows up at
+`/etc/djehuty/secrets/saml-sp-cert.pem` and
+`${file:/etc/djehuty/secrets/saml-sp-cert.pem}` resolves to its
+contents at djehuty startup.
+
+### Rotation
+
+```sh
+# 1. Update the Secret (sealed-secrets re-render, external-secrets sync,
+#    kubectl create secret ... --dry-run=client -o yaml | kubectl apply -f -, …)
+# 2. Roll the pod so the new file contents are read at startup:
+kubectl rollout restart deployment/<release>-djehuty
+```
+
+Helm's `checksum/secret` annotation only tracks chart-rendered Secrets.
+When `existingSecret` is set, the chart cannot observe content changes
+and will not roll the pod automatically — use the manual restart above,
+or run a controller like
+[reloader](https://github.com/stakater/Reloader) that watches Secrets
+and triggers rollouts.
 
 ### Using an existing Secret
 

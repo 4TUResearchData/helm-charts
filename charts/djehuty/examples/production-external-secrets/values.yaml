@@ -1,0 +1,161 @@
+# values.yaml for a production djehuty deployment using external secrets
+#
+# Shape (the only one to use on a shared cluster):
+#   * `secrets.existingSecret:` — the chart wires the pod to a Secret
+#     you manage out-of-band (sealed-secrets, external-secrets-operator,
+#     SOPS, manual `kubectl create secret`). Values under `secrets.env:`
+#     and `secrets.files:` are *declarations* of the keys the pod
+#     consumes; their values here are ignored at render time.
+#   * `config.includes:` — operational data (quotas, privileges,
+#     branding, menu fragments) lives in operator-managed ConfigMaps
+#     so the values file stays static across nightly quota refreshes.
+#     See: charts/djehuty/README.md#side-loaded-config-fragments.
+#   * SAML 2.0 SSO via SURFconext: SP cert/key referenced via
+#     ${file:/etc/djehuty/secrets/...} (the chart mounts the Secret at
+#     /etc/djehuty/secrets/ — see README "Where files end up in the pod").
+#
+# Companion resources (NOT created by this chart):
+#   * Secret      `djehuty-next-secrets`   — ORCID/DataCite/SMTP/SSI_PSK
+#                                            keys + saml-sp-cert.pem +
+#                                            saml-sp-key.pem
+#   * ConfigMap   `djehuty-quotas`         — quotas.json (regenerated
+#                                            nightly by operator tooling)
+#   * ConfigMap   `djehuty-privileges`     — privileges.json
+#
+# Install (after the companions exist):
+#   helm upgrade --install djehuty <chart> \
+#     -f examples/production-external-secrets/values.yaml \
+#     -n data4tu-next --devel
+
+image:
+  tag: ""   # TODO: pin to the djehuty release deployed in production
+
+route:
+  enabled: true
+  host: next.data.4tu.nl
+  tls:
+    enabled: true
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+persistence:
+  enabled: true
+  size: 50Gi
+
+secrets:
+  existingSecret: djehuty-next-secrets
+  # Keys (not values) — the chart binds env vars and mounts files by these names.
+  env:
+    ORCID_CLIENT_SECRET: ""
+    DATACITE_PASSWORD: ""
+    SMTP_PASSWORD: ""
+    SSI_PSK: ""
+  files:
+    saml-sp-cert.pem: ""
+    saml-sp-key.pem: ""
+
+config:
+  site-name: "Test environment for the 4TU.ResearchData repository"
+  site-shorttag: "next"
+  site-description: "Test instance of 4TU.ResearchData."
+
+  # production=1 with the pre-production attribute set marks this as
+  # pre-prod (full feature behaviour, but flagged in UI). See README
+  # "Authoring config" for the #text/attribute convention.
+  production:
+    pre-production: "1"
+    "#text": "1"
+
+  enable-iiif: "1"
+  iiif-cache-root: "/data/iiif"
+  enable-query-audit-log: "1"
+  enable-codecheck: "1"
+  live-reload: "0"
+  disable-2fa: "1"
+  disable-collaboration: "1"
+  debug-mode: "0"
+  use-x-forwarded-for: "1"
+
+  notice-message: 'Not sure which repository to use?  Try the <a href="https://ssi-test.data.4tu.nl/">data repository chooser</a>.'
+  sandbox-message: "This is a test environment of the 4TU.ResearchData repository. Any data submitted to this system may be lost at any moment."
+
+  colors:
+    primary-color: "#e1670b"
+    primary-color-hover: "#d26000"
+    primary-color-active: "#9d4800"
+    privilege-button-color: "#fce3bf"
+    footer-background-color: "#707070"
+    background-color: "#f2efed"
+
+  ssi-psk: "${env:SSI_PSK}"
+
+  datacite:
+    api-url: "https://api.test.datacite.org"
+    repository-id: "delft.data4tu"
+    password: "${env:DATACITE_PASSWORD}"
+    prefix: "10.5074"
+
+  authentication:
+    orcid:
+      client-id: "APP-DA9L86E90JYTYFOJ"
+      client-secret: "${env:ORCID_CLIENT_SECRET}"
+      endpoint: "https://orcid.org/oauth"
+    saml:
+      version: "2.0"
+      strict: "1"
+      debug: "0"
+      service-provider:
+        x509-certificate: "${file:/etc/djehuty/secrets/saml-sp-cert.pem}"
+        private-key: "${file:/etc/djehuty/secrets/saml-sp-key.pem}"
+        metadata:
+          display-name: "4TU.ResearchData"
+          url: "https://data.4tu.nl"
+          description: "The pre-production version of the 4TU.ResearchData repository."
+          logo: ""
+          organization:
+            name: "4TU.ResearchData"
+            url: "https://data.4tu.nl"
+          contact:
+            - type: "support"
+              first-name: "ResearchData"
+              last-name: "Support"
+              email: "researchdata@4tu.nl"
+            - type: "administrative"
+              first-name: "ResearchData"
+              last-name: "Support"
+              email: "researchdata@4tu.nl"
+            - type: "technical"
+              first-name: "Roel"
+              last-name: "Janssen"
+              email: "r.r.e.janssen@4tu.nl"
+      identity-provider:
+        entity-id: "https://engine.surfconext.nl/authentication/idp/metadata"
+        # SURFconext IdP certificate is public; safe to inline.
+        x509-certificate: "MIIE5zCCA0+gAwIBAgIUIJeRiN7bgv0apHl2FId0MnX50AwwDQYJKoZIhvcNAQELBQAwgYIxCzAJBgNVBAYTAk5MMRAwDgYDVQQIDAdVdHJlY2h0MRAwDgYDVQQHDAdVdHJlY2h0MRIwEAYDVQQKDAlTVVJGIEIuVi4xEzARBgNVBAsMClNVUkZjb25leHQxJjAkBgNVBAMMHWVuZ2luZS5zdXJmY29uZXh0Lm5sIDIwMjMwNTAzMB4XDTIzMDUwMzEwMDkwNFoXDTI4MDUwMjEwMDkwNFowgYIxCzAJBgNVBAYTAk5MMRAwDgYDVQQIDAdVdHJlY2h0MRAwDgYDVQQHDAdVdHJlY2h0MRIwEAYDVQQKDAlTVVJGIEIuVi4xEzARBgNVBAsMClNVUkZjb25leHQxJjAkBgNVBAMMHWVuZ2luZS5zdXJmY29uZXh0Lm5sIDIwMjMwNTAzMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAmarOz3JN7K2rZJxR5Oy061oRh3aZ3zmM8jbUaztSXNJwmZaN+AZjnowSkyT9MRRDLn4ZX1hy1f4kQOhf8BxU9TxK1ATviGUegpT2fUa3HR3JQyi8zMSjS3aGJxwokE4uST10SI1fV4aG8SsbKb0tzaH22eT6wJHgvfFs7iSOZdcI7kvXEGLPP7VIfRaiKqIxDT5DcUe0QX5F1zcPPniazSCwW81Ta2xZnwrXKJiXwgl3K2SrBBN7ss/qmSRpBT1pLvBiIDbM8n8fp8+lGQzX6DcGqJA7+5+UryRIY5f6ZzJs5qUNzTdLQLE82xaZsyhJVQrVkuXk5ufCXOa5izspTnVMOgu56FH0b0iwvpEwq1OAtrWoj/CIOZt0VsTB4cn00sATWjV/ss33iauEqSsb8e7THIZfF2nZ5QBG3mUynsyTTU5cxouTQ+UdISvdAOhrV5a4j/d5rbqplVFjCm0KNCIz/tnNIQpGDvmk9vMn9Z52tJ9gQYo/rv4pUGxKu7yTAgMBAAGjUzBRMB0GA1UdDgQWBBSLXQ3uF1SkIkMTdXl9Om/jn3asZjAfBgNVHSMEGDAWgBSLXQ3uF1SkIkMTdXl9Om/jn3asZjAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBgQBX1rZrm9EakYBnr64BRTKEZ3bIju7CvdbDo2kJMJkLN94qndkwntiECJ53M5lEzR96MrYs20Puqs3/OuJPyJ6CyUM3fsYR8fgXqapgVdyf8nLCAKM+HjhbLZzbkrdLeo+szeBbYV0XDotz4j/oLPnnJDNSDx9pW61woXdqJI8EYu61+IZ+VV6VBChfxZmtVeFU8aaK2tQn498Dy5Jf4zibtmuBmx5DMNQLG4onOG6wp4WEvy6XEEyXz+ve6KtJP9tBbxbIsJX0mfRP8w1pX8ttWUGGfCSb+YlX2NgdIayVxg8UjW1BrjQnDX6+f8ENn3980J74LTRF2QdDtM5DtPHPzOfsUsTl7A1DMs9+86z9Y69XyFWMExZoouSo2a8krTW1fqXhmN1nuzndrcrkHd6sVZy7ikcrpXYdcxhn20mNRO1erqBGue/UyHRpNCUGvTIDx6U6VW9wDrN4gXp8HFygyAqN6bpvnATbHbOqGB2nA04PZRklBqlod0mZCq4Z1pQ="
+        single-signon-service:
+          url: "https://engine.surfconext.nl/authentication/idp/single-sign-on/key:20230503"
+          binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+
+  email:
+    server: "smtp.gmail.com"
+    port: "587"
+    starttls: "1"
+    username: "djehuty@4tu.nl"
+    password: "${env:SMTP_PASSWORD}"
+    from: "noreplydata@4tu.nl"
+    subject-prefix: "[4tu-next]"
+
+  # Operational data lives in operator-managed ConfigMaps, NOT here.
+  # `djehuty-quotas` and `djehuty-privileges` are refreshed nightly by
+  # an external job that exports from the source of truth; the chart
+  # mounts them at /etc/djehuty/config.d/<refName>/ and emits an
+  # `include:` per listed key into the rendered config.json. djehuty's
+  # config loader walks the includes at startup.
+  #
+  # See README "Side-loaded config fragments" for the ConfigMap shape
+  # and rotation procedure.
+  includes:
+    - configMap: djehuty-quotas
+      keys: ["quotas.json"]
+    - configMap: djehuty-privileges
+      keys: ["privileges.json"]
