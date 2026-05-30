@@ -62,6 +62,11 @@ ingress:
 # Don't enable both `ingress` and `route` unless you really mean it.
 route:
   enabled: false
+  # -- Override the Route resource's `metadata.name`. Useful when the
+  # Route name is consumed by external systems (DNS records, monitoring,
+  # bookmarks). When empty, defaults to `<release>-djehuty`. Only affects
+  # the Route's K8s name; the Service/Deployment/etc. names are unchanged.
+  name: ""
   # -- Hostname. If empty, OpenShift auto-assigns one under the cluster's
   # default app domain (e.g. djehuty-<ns>.apps.<cluster>.example).
   host: ""

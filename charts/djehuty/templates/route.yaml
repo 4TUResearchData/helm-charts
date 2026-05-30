@@ -11,7 +11,7 @@
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: {{ include "djehuty.fullname" . }}
+  name: {{ default (include "djehuty.fullname" .) .Values.route.name }}
   labels: {{- include "djehuty.labels" . | nindent 4 }}
   {{- with $annotations }}
   annotations: {{- toYaml . | nindent 4 }}
