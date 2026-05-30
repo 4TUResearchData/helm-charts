@@ -25,17 +25,24 @@ Search for available charts:
 helm search repo 4turesearchdata
 ```
 
-Install a chart:
+Install the djehuty stack (with bundled Virtuoso):
 
 ```bash
 helm install my-djehuty 4turesearchdata/djehuty
+```
+
+Install Virtuoso standalone:
+
+```bash
+helm install my-sparql 4turesearchdata/virtuoso
 ```
 
 ## Charts
 
 | Chart | Description |
 |---|---|
-| djehuty | Djehuty research-data repository (with optional bundled Virtuoso SPARQL store) |
+| djehuty | Djehuty research-data repository. Depends on `virtuoso` (bundled by default, gated by `virtuoso.enabled`). |
+| virtuoso | OpenLink Virtuoso (open-source) SPARQL/RDF triple store. Installable standalone or as the djehuty subchart. |
 
 ## Source
 
