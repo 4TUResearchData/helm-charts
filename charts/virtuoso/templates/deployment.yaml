@@ -75,7 +75,25 @@ spec:
           {{- with .Values.securityContext }}
           securityContext: {{- toYaml . | nindent 12 }}
           {{- end }}
+          # The upstream entrypoint ends with `exec $GOSU virtuoso virtuoso-t -f`,
+          # which drops privileges from root to the `virtuoso` user. Under
+          # OpenShift's random non-root UID we can't drop, and the pod dies with
+          # `failed switching to "virtuoso": operation not permitted`. We set
+          # `GOSU=""` and install a `virtuoso` shim that just forwards its args,
+          # so the line collapses to `exec virtuoso-t -f` (and the same trick
+          # handles the `$GOSU virtuoso bash <init-script>` path).
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              printf '%s\n' '#!/bin/sh' 'exec "$@"' > /tmp/virtuoso
+              chmod +x /tmp/virtuoso
+              export PATH=/tmp:$PATH
+              exec /virtuoso-entrypoint.sh start
           env:
+            - name: GOSU
+              value: ""
             - name: DBA_PASSWORD
               valueFrom:
                 secretKeyRef:

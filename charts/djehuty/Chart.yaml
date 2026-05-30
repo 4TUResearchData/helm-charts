@@ -2,7 +2,7 @@ apiVersion: v2
 name: djehuty
 description: Djehuty research-data repository (4TU.ResearchData) — pre-release, under active development
 type: application
-version: 0.1.0-dev.1
+version: 0.1.0-dev.2
 appVersion: "26.2"
 annotations:
   artifacthub.io/prerelease: "true"
@@ -22,6 +22,6 @@ maintainers:
 icon: https://data.4tu.nl/static/images/logo-4tu-research-data.svg
 dependencies:
   - name: virtuoso
-    version: "0.1.0-dev.1"
+    version: "0.1.0-dev.2"
     repository: "file://../virtuoso"
     condition: virtuoso.enabled
