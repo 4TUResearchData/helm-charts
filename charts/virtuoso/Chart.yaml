@@ -2,7 +2,7 @@ apiVersion: v2
 name: virtuoso
 description: OpenLink Virtuoso (open-source) — SPARQL/RDF triple store — pre-release, under active development
 type: application
-version: 0.1.0-dev
+version: 0.1.0-dev.1
 appVersion: "7.2.17"
 home: https://github.com/4TUResearchData/helm-charts/tree/main/charts/virtuoso
 sources:
