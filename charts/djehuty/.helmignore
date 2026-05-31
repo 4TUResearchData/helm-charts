@@ -7,3 +7,6 @@
 *.tmp
 .vscode/
 .idea/
+# ct test inputs and rendered reference deployments are dev-time only.
+ci/
+examples/
