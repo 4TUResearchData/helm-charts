@@ -1,0 +1,64 @@
+# values.yaml for a staging djehuty deployment (OpenShift)
+#
+# Shape: chart-rendered Secret with inline test credentials, OpenShift
+# Route with cert-manager edge TLS, bundled Virtuoso. Suitable for
+# pre-production environments where the operator is OK with secrets
+# living in values.yaml (or pulled from a sealed-secret you decrypt
+# locally before `helm upgrade`).
+#
+# For production, use ../production-external-secrets/values.yaml
+# instead — that shape externalizes secrets and operational data.
+#
+# Install:
+#   helm upgrade --install djehuty <chart> \
+#     -f examples/staging/values.yaml \
+#     -n data4tu-stage --create-namespace --devel
+
+image:
+  tag: ""   # pin to a release tag for staging; "" falls back to Chart.AppVersion
+
+route:
+  enabled: true
+  host: staging.data.example.org
+  tls:
+    enabled: true
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+    certManager:
+      enabled: true
+      clusterIssuer: letsencrypt-prod
+
+persistence:
+  enabled: true
+  size: 10Gi
+
+config:
+  site-name: "Repository (staging)"
+  site-shorttag: "staging"
+  production: "0"
+  debug-mode: "0"
+
+  datacite:
+    api-url: "https://api.test.datacite.org"
+    repository-id: "delft.data4tu"
+    password: "${env:DATACITE_PASSWORD}"
+    prefix: "10.5074"
+
+  authentication:
+    orcid:
+      client-id: "APP-XXXXXXXXXXXXXXXX"
+      client-secret: "${env:ORCID_CLIENT_SECRET}"
+      endpoint: "https://sandbox.orcid.org/oauth"
+
+secrets:
+  # Chart-renders these into a Secret; suitable for staging only.
+  # For production, set `existingSecret:` and manage out-of-band.
+  env:
+    ORCID_CLIENT_SECRET: "REPLACE_ME"
+    DATACITE_PASSWORD: "REPLACE_ME"
+
+virtuoso:
+  enabled: true
+  dbaPassword: "REPLACE_ME_with_real_dba_password"
+  persistence:
+    size: 20Gi

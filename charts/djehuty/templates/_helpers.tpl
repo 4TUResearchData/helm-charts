@@ -102,5 +102,25 @@ Build the full djehuty config dict.
     "state-graph" .Values.rdfStore.stateGraph
 -}}
 {{- $_ := set $cfg "rdf-store" $rdf -}}
+{{- /*
+Side-loaded config fragments → djehuty `include:` array.
+Walks config.includes[], emits one absolute path per (ref, key) into the
+`include:` array on the rendered config. Existing user-supplied `include:`
+entries (if any) are preserved and prepended.
+*/ -}}
+{{- $includes := list -}}
+{{- with index $cfg "include" -}}{{- $includes = . -}}{{- end -}}
+{{- range $idx, $inc := default (list) (index $cfg "includes") -}}
+  {{- $name := default $inc.secret $inc.configMap -}}
+  {{- if not $name -}}{{- fail (printf "config.includes[%d]: must set either 'configMap:' or 'secret:'" $idx) -}}{{- end -}}
+  {{- if and $inc.configMap $inc.secret -}}{{- fail (printf "config.includes[%d]: set 'configMap:' OR 'secret:', not both" $idx) -}}{{- end -}}
+  {{- if not $inc.keys -}}{{- fail (printf "config.includes[%s]: 'keys:' is required (list the files to include from this reference)" $name) -}}{{- end -}}
+  {{- range $k := $inc.keys -}}
+    {{- $includes = append $includes (printf "/etc/djehuty/config.d/%s/%s" $name $k) -}}
+  {{- end -}}
+{{- end -}}
+{{- if $includes -}}{{- $_ := set $cfg "include" $includes -}}{{- end -}}
+{{- /* The `includes:` meta-key is chart machinery, not djehuty config. */ -}}
+{{- $_ := unset $cfg "includes" -}}
 {{- dict "djehuty" $cfg | toJson -}}
 {{- end -}}

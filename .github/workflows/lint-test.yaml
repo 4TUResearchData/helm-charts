@@ -33,6 +33,11 @@ jobs:
       - name: Set up chart-testing
         uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
 
+      - name: Add 4TU.ResearchData chart repo
+        run: |
+          helm repo add 4turesearchdata https://4turesearchdata.github.io/helm-charts || true
+          helm repo update || true
+
       - name: Detect changed charts
         id: list-changed
         run: |

@@ -1,0 +1,50 @@
+# values.yaml for a throwaway local-dev djehuty deployment
+#
+# Shape: smallest viable djehuty, bundled Virtuoso, no Ingress/Route,
+# reachable via `kubectl port-forward`. Secrets are inline because this
+# is a single-operator dev cluster (kind/minikube/Docker Desktop). DO
+# NOT use this shape on a shared cluster — see ../staging/ instead.
+#
+# Install:
+#   helm dependency update charts/djehuty
+#   helm install djehuty charts/djehuty -f examples/local-dev/values.yaml
+#
+# Reach it:
+#   kubectl port-forward svc/djehuty-djehuty 8080:8080
+#   open http://localhost:8080
+
+image:
+  # Local image build (docker build -t djehuty:dev -f docker/Dockerfile .).
+  # Override the repository to use the published image instead.
+  repository: djehuty
+  tag: dev
+  pullPolicy: Never   # local images only; never pull
+
+persistence:
+  enabled: true
+  size: 1Gi           # tiny — local-dev rarely needs more
+
+config:
+  site-name: "djehuty (local dev)"
+  site-shorttag: "local"
+  production: "0"
+  debug-mode: "1"
+  live-reload: "1"
+
+  authentication:
+    orcid:
+      client-id: ""
+      client-secret: "${env:ORCID_CLIENT_SECRET}"
+      endpoint: "https://sandbox.orcid.org/oauth"
+
+secrets:
+  # Inline, since this is a single-operator dev cluster.
+  env:
+    ORCID_CLIENT_SECRET: "local-dev-not-a-real-secret"
+
+# Bundled Virtuoso, smallest footprint.
+virtuoso:
+  enabled: true
+  dbaPassword: "dba"
+  persistence:
+    size: 2Gi

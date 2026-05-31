@@ -1,0 +1,38 @@
+# Example shape of the operator-managed ConfigMap referenced by
+# config.includes[] in this directory's values.yaml. NOT applied by the
+# chart. See ./configmap-quotas.example.yaml for the rationale and the
+# rotation procedure.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: djehuty-privileges
+  namespace: data4tu-next
+data:
+  privileges.json: |
+    {
+      "djehuty": {
+        "privileges": {
+          "account": [
+            {
+              "email": "admin@example.org",
+              "may-administer": "1",
+              "may-run-sparql-queries": "1",
+              "may-impersonate": "1",
+              "may-review": "1",
+              "may-review-quotas": "1",
+              "may-process-feedback": "1",
+              "may-review-integrity": "1",
+              "may-receive-email-notifications": "1"
+            },
+            {
+              "email": "reviewer@example.org",
+              "may-administer": "0",
+              "may-impersonate": "0",
+              "may-review": "1",
+              "may-review-quotas": "0"
+            }
+          ]
+        }
+      }
+    }
