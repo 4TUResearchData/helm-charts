@@ -23,5 +23,5 @@ icon: https://data.4tu.nl/static/images/logo-4tu-research-data.svg
 dependencies:
   - name: virtuoso
     version: "0.1.0-dev.4"
-    repository: "file://../virtuoso"
+    repository: "https://4turesearchdata.github.io/helm-charts"
     condition: virtuoso.enabled
