@@ -54,12 +54,27 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          # Synthetic X-Forwarded-For on probe requests: kubelet hits the pod
+          # directly, bypassing whatever Router/Ingress would normally inject
+          # the header. djehuty.web.wsgi logs ERROR on every probe when
+          # config.use-x-forwarded-for is on; the synthetic 127.0.0.1 silences
+          # that and is harmless when use-x-forwarded-for is off.
           readinessProbe:
-            httpGet: { path: /, port: http }
+            httpGet:
+              path: /
+              port: http
+              httpHeaders:
+                - name: X-Forwarded-For
+                  value: 127.0.0.1
             initialDelaySeconds: 10
             periodSeconds: 5
           livenessProbe:
-            httpGet: { path: /, port: http }
+            httpGet:
+              path: /
+              port: http
+              httpHeaders:
+                - name: X-Forwarded-For
+                  value: 127.0.0.1
             initialDelaySeconds: 30
             periodSeconds: 15
           volumeMounts:
