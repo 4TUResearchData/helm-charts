@@ -1,6 +1,6 @@
 dependencies:
 - name: virtuoso
   repository: file://../virtuoso
-  version: 0.1.0-dev.3
-digest: sha256:40020ce25c5d75bce18cc68638a1886d9ab19ef62fc3406b0316796f861259c0
-generated: "2026-05-30T14:37:11.641421+02:00"
+  version: 0.1.0-dev.4
+digest: sha256:d971de07d5a573044f48ef231348c55b107000e972133e2026de29f2e4a615b1
+generated: "2026-05-31T07:36:47.438913+02:00"

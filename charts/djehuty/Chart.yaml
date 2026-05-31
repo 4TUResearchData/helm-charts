@@ -17,11 +17,11 @@ keywords:
   - djehuty
   - 4tu
 maintainers:
-  - name: 4TU.ResearchData
+  - name: 4TUResearchData
     url: https://github.com/4TUResearchData
 icon: https://data.4tu.nl/static/images/logo-4tu-research-data.svg
 dependencies:
   - name: virtuoso
-    version: "0.1.0-dev.3"
+    version: "0.1.0-dev.4"
     repository: "file://../virtuoso"
     condition: virtuoso.enabled
