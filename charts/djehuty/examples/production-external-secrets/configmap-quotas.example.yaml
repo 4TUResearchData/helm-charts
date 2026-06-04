@@ -1,0 +1,35 @@
+# Example shape of the operator-managed ConfigMap referenced by
+# config.includes[] in this directory's values.yaml. NOT applied by the
+# chart — the operator builds and applies it out-of-band, typically from
+# a nightly export of the source-of-truth quota database.
+#
+# kubectl apply -f configmap-quotas.example.yaml -n <namespace>
+#
+# The value must be valid djehuty JSON config — same shape the chart
+# emits, just the subtree you want to merge. djehuty's config loader
+# merges every <include> it finds.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: djehuty-quotas
+  namespace: data4tu-next   # match your djehuty release namespace
+data:
+  quotas.json: |
+    {
+      "djehuty": {
+        "quotas": {
+          "default": "5000000000",
+          "group": [
+            { "domain": "tudelft.nl", "#text": "10000000000" },
+            { "domain": "utwente.nl", "#text": "10000000000" },
+            { "domain": "tue.nl",     "#text": "10000000000" },
+            { "domain": "wur.nl",     "#text": "10000000000" }
+          ],
+          "account": [
+            { "email": "user@example.org", "#text": "21474836480" },
+            { "email": "another@example.org", "#text": "53687091200" }
+          ]
+        }
+      }
+    }

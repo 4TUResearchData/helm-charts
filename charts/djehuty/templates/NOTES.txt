@@ -1,0 +1,11 @@
+djehuty installed as release: {{ .Release.Name }}
+
+Reach djehuty:
+  kubectl port-forward svc/{{ include "djehuty.fullname" . }} 8080:{{ .Values.service.port }}
+  open http://localhost:8080
+{{ if .Values.virtuoso.enabled }}
+Virtuoso SPARQL endpoint (in-cluster):
+  http://{{ include "djehuty.virtuoso.fullname" . }}:{{ .Values.virtuoso.service.port }}/sparql
+{{ end }}
+Verify rendered config:
+  kubectl get cm {{ include "djehuty.fullname" . }}-config -o jsonpath='{.data.config\.json}' | jq .

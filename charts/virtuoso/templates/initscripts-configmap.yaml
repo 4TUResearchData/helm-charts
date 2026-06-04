@@ -1,0 +1,12 @@
+{{- if .Values.initScripts }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "virtuoso.fullname" . }}-init
+  labels: {{- include "virtuoso.labels" . | nindent 4 }}
+data:
+  {{- range $name, $content := .Values.initScripts }}
+  {{ $name }}: |
+{{ $content | indent 4 }}
+  {{- end }}
+{{- end }}
