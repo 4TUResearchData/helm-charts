@@ -1,0 +1,18 @@
+Virtuoso ({{ .Chart.AppVersion }}) is starting up.
+
+In-cluster SPARQL endpoint:
+
+  http://{{ include "virtuoso.fullname" . }}:{{ .Values.service.port }}/sparql
+
+Port-forward for local access:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "virtuoso.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  open http://localhost:{{ .Values.service.port }}/sparql
+
+The DBA password is in Secret/{{ include "virtuoso.fullname" . }} under key DBA_PASSWORD.
+
+{{- if .Values.restore.enabled }}
+
+Checkpoint restore is enabled (no-op without an operator-placed marker).
+See the chart README "Restoring a backup" section for the operator flow.
+{{- end }}
