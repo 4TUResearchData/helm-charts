@@ -5,6 +5,38 @@ entries:
       artifacthub.io/maturity: alpha
       artifacthub.io/prerelease: "true"
     apiVersion: v2
+    appVersion: "26.3"
+    created: "2026-06-13T08:48:26.510583829Z"
+    dependencies:
+    - condition: virtuoso.enabled
+      name: virtuoso
+      repository: https://4turesearchdata.github.io/helm-charts
+      version: 0.1.0
+    description: Djehuty research-data repository (4TU.ResearchData) — pre-release,
+      under active development
+    digest: e7ca5529958f8c01c6e0f91fd382f3f31a4df4409b561c161dc2b209b271ae61
+    home: https://github.com/4TUResearchData/helm-charts/tree/main/charts/djehuty
+    icon: https://data.4tu.nl/static/images/logo-4tu-research-data.svg
+    keywords:
+    - research-data
+    - repository
+    - djehuty
+    - 4tu
+    maintainers:
+    - name: 4TUResearchData
+      url: https://github.com/4TUResearchData
+    name: djehuty
+    sources:
+    - https://github.com/4TUResearchData/djehuty
+    - https://github.com/4TUResearchData/helm-charts
+    type: application
+    urls:
+    - https://github.com/4TUResearchData/helm-charts/releases/download/djehuty-0.1.2/djehuty-0.1.2.tgz
+    version: 0.1.2
+  - annotations:
+      artifacthub.io/maturity: alpha
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
     appVersion: "26.2"
     created: "2026-06-13T08:17:00.77345065Z"
     dependencies:
@@ -94,4 +126,4 @@ entries:
     urls:
     - https://github.com/4TUResearchData/helm-charts/releases/download/virtuoso-0.1.0/virtuoso-0.1.0.tgz
     version: 0.1.0
-generated: "2026-06-13T08:17:00.773466034Z"
+generated: "2026-06-13T08:48:26.510600805Z"
