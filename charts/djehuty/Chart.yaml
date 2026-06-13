@@ -2,8 +2,8 @@ apiVersion: v2
 name: djehuty
 description: Djehuty research-data repository (4TU.ResearchData) — pre-release, under active development
 type: application
-version: 0.1.1
-appVersion: "26.2"
+version: 0.1.2
+appVersion: "26.3"
 annotations:
   artifacthub.io/prerelease: "true"
   artifacthub.io/maturity: alpha
