@@ -6,7 +6,7 @@ image:
   repository: ghcr.io/4turesearchdata/djehuty
   # -- Image tag. When empty, falls back to `.Chart.AppVersion` (currently
   # "26.2"). Override here to pin a different upstream djehuty version.
-  tag: "dev"
+  tag: "26.2"
   pullPolicy: IfNotPresent
 
 # -- Number of djehuty replicas. Keep at 1 for now: djehuty stores cache on
@@ -112,6 +112,19 @@ config:
   site-shorttag: "helm"
   bind-address: "0.0.0.0"
   port: "8080"
+  # -- Mapping of publisher names → ROR URLs. When a dataset's publisher
+  # matches an entry, djehuty renders it as a link to the ROR record with
+  # the ROR icon. The entry whose `name` matches `site-name` is also used
+  # as the instance's own ROR URL in the RO-Crate export. Same example
+  # shape as djehuty's `etc/djehuty/djehuty-example-config.json`.
+  publisher-rors:
+    publisher-ror:
+      - name: "Djehuty (helm)"
+        url: "https://ror.org/02d887280"
+      - name: "Delft University of Technology"
+        url: "https://ror.org/02e2c7k09"
+      - name: "Eindhoven University of Technology"
+        url: "https://ror.org/02c2kyt77"
   # -- Public URL. Leave empty to auto-derive: from ingress.hosts[0] when
   # ingress is enabled (https:// if ingress.tls is set, else http://), or
   # http://localhost:<service.port> otherwise.

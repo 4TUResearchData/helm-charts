@@ -1,4 +1,5 @@
 version: 2
+enable-beta-ecosystems: true
 updates:
   - package-ecosystem: github-actions
     directory: "/"
@@ -7,3 +8,27 @@ updates:
     labels:
       - dependencies
       - github-actions
+  - package-ecosystem: "helm"
+    directory: "/charts/djehuty/"
+    schedule:
+      interval: "daily"
+      time: "10:00"
+    commit-message:
+      prefix: "deps-helm"
+      include: "scope"
+    groups:
+      djehuty-helm-deps:
+        patterns:
+          - "*"
+  - package-ecosystem: "helm"
+    directory: "/charts/virtuoso/"
+    schedule:
+      interval: "daily"
+      time: "10:00"
+    commit-message:
+      prefix: "deps-helm"
+      include: "scope"
+    groups:
+      virtuoso-helm-deps:
+        patterns:
+          - "*"

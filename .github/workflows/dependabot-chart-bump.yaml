@@ -1,0 +1,69 @@
+name: dependabot-chart-bump
+
+# When Dependabot bumps `image.tag` in a chart's values.yaml, also bump
+# that chart's Chart.yaml — patch-increment `version` and align
+# `appVersion` with the new image tag. The PR ends up as a complete chart
+# release commit, which the `lint-test` (`check-version-increment: true`)
+# workflow then accepts.
+
+on:
+  pull_request_target:
+    paths:
+      - "charts/**/values.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 0
+          # PAT (not GITHUB_TOKEN): Dependabot PRs get a read-only GITHUB_TOKEN
+          # and pushes from it don't re-trigger pull_request workflows.
+          token: ${{ secrets.DEPENDABOT_HELM_BUMP_TOKEN }}
+
+      - name: Bump Chart.yaml in affected charts
+        run: |
+          set -euo pipefail
+          base="origin/${{ github.event.pull_request.base.ref }}"
+          changed=$(git diff --name-only "$base"...HEAD -- 'charts/*/values.yaml' \
+            | awk -F/ '{print $2}' | sort -u)
+          [ -z "$changed" ] && { echo "no chart values changes"; exit 0; }
+
+          for chart in $changed; do
+            cy="charts/$chart/Chart.yaml"
+            vy="charts/$chart/values.yaml"
+
+            cur=$(yq '.version' "$cy")
+            new=$(echo "$cur" | awk 'BEGIN{FS=OFS="."} { $NF=$NF+1; print }')
+            yq -i ".version = \"$new\"" "$cy"
+            echo "$chart: version $cur -> $new"
+
+            tag=$(yq '.image.tag' "$vy")
+            if [ -n "$tag" ] && [ "$tag" != "null" ]; then
+              yq -i ".appVersion = \"$tag\"" "$cy"
+              echo "$chart: appVersion -> $tag"
+            fi
+
+            # Dependabot occasionally strips the trailing newline from
+            # values.yaml; yamllint then fails. Restore it idempotently.
+            [ -n "$(tail -c1 "$vy")" ] && printf '\n' >> "$vy"
+          done
+
+      - name: Commit & push
+        run: |
+          if git diff --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add charts/*/Chart.yaml charts/*/values.yaml
+          git commit -s -m "chore: bump chart version and appVersion after dependency update"
+          git push
