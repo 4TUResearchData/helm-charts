@@ -100,6 +100,7 @@ Build the full djehuty config dict.
     "sparql-uri" (include "djehuty.sparqlUri" .)
     "sparql-update-uri" (include "djehuty.sparqlUpdateUri" .)
     "state-graph" .Values.rdfStore.stateGraph
+    "auto-migrate-on-boot" (ternary "1" "0" (default false .Values.rdfStore.autoMigrateOnBoot))
 -}}
 {{- $_ := set $cfg "rdf-store" $rdf -}}
 {{- /*

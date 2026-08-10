@@ -256,6 +256,11 @@ rdfStore:
   stateGraph: "djehuty://local"
   sparqlUri: ""        # e.g. "http://my-virtuoso.sparql:8890/sparql"
   sparqlUpdateUri: ""  # usually the same URL as sparqlUri
+  # -- Run `djehuty migrate upgrade` automatically at web startup
+  # (rdf-store/auto-migrate-on-boot). Keeps fresh instances usable without
+  # a manual migration step; drift detection still hard-fails either way.
+  # Set to false where operators want to gate schema changes manually.
+  autoMigrateOnBoot: true
 
 # -- Bundled Virtuoso subchart (charts/virtuoso). Disable to use an
 # externally-managed SPARQL store via `rdfStore` above. Anything under
