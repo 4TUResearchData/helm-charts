@@ -53,4 +53,4 @@ the security disclosure process are inherited from the parent
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache License 2.0 — see [LICENSE](LICENSE).
