@@ -103,6 +103,34 @@ entries:
       artifacthub.io/prerelease: "true"
     apiVersion: v2
     appVersion: 7.2.17
+    created: "2026-08-10T14:08:04.276231142Z"
+    description: OpenLink Virtuoso (open-source) — SPARQL/RDF triple store — pre-release,
+      under active development
+    digest: 9c3b5acf6ee228849f438a44bffd928f272a06bd694d66a1281265048fc49479
+    home: https://github.com/4TUResearchData/helm-charts/tree/main/charts/virtuoso
+    icon: https://data.4tu.nl/static/images/logo-4tu-research-data.svg
+    keywords:
+    - virtuoso
+    - sparql
+    - rdf
+    - triplestore
+    - openlink
+    maintainers:
+    - name: 4TUResearchData
+      url: https://github.com/4TUResearchData
+    name: virtuoso
+    sources:
+    - https://github.com/openlink/virtuoso-opensource
+    - https://github.com/4TUResearchData/helm-charts
+    type: application
+    urls:
+    - https://github.com/4TUResearchData/helm-charts/releases/download/virtuoso-0.1.1/virtuoso-0.1.1.tgz
+    version: 0.1.1
+  - annotations:
+      artifacthub.io/maturity: alpha
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 7.2.17
     created: "2026-06-04T07:47:12.313191+02:00"
     description: OpenLink Virtuoso (open-source) — SPARQL/RDF triple store — pre-release,
       under active development
@@ -126,4 +154,4 @@ entries:
     urls:
     - https://github.com/4TUResearchData/helm-charts/releases/download/virtuoso-0.1.0/virtuoso-0.1.0.tgz
     version: 0.1.0
-generated: "2026-06-13T08:48:26.510600805Z"
+generated: "2026-08-10T14:08:04.276252341Z"
