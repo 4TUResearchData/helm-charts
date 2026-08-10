@@ -110,6 +110,39 @@ spec:
             tcpSocket: { port: sparql }
             initialDelaySeconds: 60
             periodSeconds: 15
+          {{- if .Values.initScripts }}
+          # The image's entrypoint runs initdb.d scripts ONLY when it creates a
+          # brand-new database. A crashed first boot or a `restore:` of a backup
+          # leaves a database without them (symptom: SPARQL reads work, every
+          # update returns 500 — the SPARQL_UPDATE grants are missing). The
+          # scripts are idempotent, so re-apply them on every container start.
+          # Output goes to the container's stdout (fd of PID 1) so it shows in
+          # `kubectl logs`. Always exits 0: a failed postStart would kill the
+          # container and mask the real problem.
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/bash
+                  - -c
+                  - |
+                    ISQL=/opt/virtuoso-opensource/bin/isql
+                    LOG=/proc/1/fd/1
+                    for _ in $(seq 1 150); do
+                      if "$ISQL" 1111 dba "$DBA_PASSWORD" exec="status();" >/dev/null 2>&1; then
+                        for f in /opt/virtuoso-opensource/initdb.d/*.sql; do
+                          [ -e "$f" ] || continue
+                          echo "[postStart] re-applying $f" > "$LOG"
+                          "$ISQL" 1111 dba "$DBA_PASSWORD" "$f" > "$LOG" 2>&1 || \
+                            echo "[postStart] WARNING: $f failed" > "$LOG"
+                        done
+                        exit 0
+                      fi
+                      sleep 2
+                    done
+                    echo "[postStart] WARNING: server not reachable within 300s (wrong DBA password after a foreign restore?); init scripts NOT re-applied" > "$LOG"
+                    exit 0
+          {{- end }}
           {{- with .Values.resources }}
           resources: {{- toYaml . | nindent 12 }}
           {{- end }}
