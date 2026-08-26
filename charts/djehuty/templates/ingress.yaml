@@ -13,6 +13,9 @@ kind: Ingress
 metadata:
   name: {{ include "djehuty.fullname" . }}
   labels: {{- include "djehuty.labels" . | nindent 4 }}
+    {{- with .Values.ingress.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- with $annotations }}
   annotations: {{- toYaml . | nindent 4 }}
   {{- end }}

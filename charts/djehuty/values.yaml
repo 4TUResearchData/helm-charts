@@ -36,7 +36,8 @@ service:
 # Disabled by default — use `kubectl port-forward` for local testing.
 ingress:
   enabled: false
-  className: "nginx"             # e.g. "nginx", "traefik"
+  className: "nginx"             # e.g. "nginx", "traefik", "openshift"
+  labels: {}                     # extra labels for the Ingress
   annotations: {}
     # nginx.ingress.kubernetes.io/proxy-body-size: "5g"   # large uploads
   hosts:
