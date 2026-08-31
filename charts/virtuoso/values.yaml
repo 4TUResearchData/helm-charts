@@ -62,6 +62,22 @@ initScripts: {}
 restore:
   enabled: true
 
+# -- Extra environment variables for the virtuoso container, as a list of
+# {name, value}. The upstream image maps `VIRT_<Section>_<Key>` vars into the
+# generated virtuoso.ini — use these to tune the server for the data size, e.g.
+# lift the SPARQL query-cost/execution limits so heavy queries on a large store
+# aren't rejected.
+#   env:
+#     - name: VIRT_SPARQL_MaxQueryCostEstimationTime
+#       value: "0"        # 0 = don't reject queries by estimated cost
+#     - name: VIRT_SPARQL_MaxQueryExecutionTime
+#       value: "300"      # seconds
+#     - name: VIRT_Parameters_NumberOfBuffers
+#       value: "85000"    # ~680 MB of 8 KB buffers; size to the pod memory
+#     - name: VIRT_Parameters_MaxDirtyBuffers
+#       value: "65000"
+env: []
+
 resources: {}
 nodeSelector: {}
 tolerations: []

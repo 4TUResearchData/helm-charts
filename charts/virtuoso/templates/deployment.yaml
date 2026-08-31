@@ -99,6 +99,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "virtuoso.secretName" . }}
                   key: {{ include "virtuoso.dbaPasswordKey" . }}
+            {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: sparql
               containerPort: 8890
