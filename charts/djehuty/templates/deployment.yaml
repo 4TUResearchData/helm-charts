@@ -54,29 +54,40 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          # Synthetic X-Forwarded-For on probe requests: kubelet hits the pod
-          # directly, bypassing whatever Router/Ingress would normally inject
-          # the header. djehuty.web.wsgi logs ERROR on every probe when
-          # config.use-x-forwarded-for is on; the synthetic 127.0.0.1 silences
-          # that and is harmless when use-x-forwarded-for is off.
+          # Probe /robots.txt, not /. The homepage runs repository_statistics
+          # (counts every dataset, author, collection, and sums ~all files),
+          # which is slow to compute the first time after each start on a large
+          # store — with the cache cleared on boot the probe would time out and
+          # kill the pod before it can compute-and-cache, crash-looping the
+          # instance on production-scale data. /robots.txt returns a static
+          # string with no database access, so it's a true "process is up"
+          # signal. timeoutSeconds/failureThreshold add headroom for transient
+          # slowness. (X-Forwarded-For: kubelet hits the pod directly, bypassing
+          # the Router that would inject it; djehuty.web.wsgi logs ERROR per probe
+          # when use-x-forwarded-for is on — the synthetic 127.0.0.1 silences it
+          # and is harmless when off.)
           readinessProbe:
             httpGet:
-              path: /
+              path: /robots.txt
               port: http
               httpHeaders:
                 - name: X-Forwarded-For
                   value: 127.0.0.1
             initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 6
           livenessProbe:
             httpGet:
-              path: /
+              path: /robots.txt
               port: http
               httpHeaders:
                 - name: X-Forwarded-For
                   value: 127.0.0.1
             initialDelaySeconds: 30
             periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
           volumeMounts:
             - name: config
               mountPath: /etc/djehuty/config.json
