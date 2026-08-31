@@ -2,7 +2,7 @@ apiVersion: v2
 name: djehuty
 description: Djehuty research-data repository (4TU.ResearchData) — pre-release, under active development
 type: application
-version: 0.1.5
+version: 0.1.6
 appVersion: "26.4"
 annotations:
   artifacthub.io/prerelease: "true"
@@ -22,6 +22,6 @@ maintainers:
 icon: https://data.4tu.nl/static/images/logo-4tu-research-data.svg
 dependencies:
   - name: virtuoso
-    version: "0.1.1"
+    version: "0.1.2"
     repository: "https://4turesearchdata.github.io/helm-charts"
     condition: virtuoso.enabled
