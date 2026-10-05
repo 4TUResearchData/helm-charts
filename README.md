@@ -3,12 +3,6 @@
 Helm charts maintained by [4TU.ResearchData](https://data.4tu.nl/) for
 deploying our open-source research-data services on Kubernetes and OpenShift.
 
-> [!WARNING]
-> **Development phase.** These charts are under active development and have
-> not yet had a stable release. Defaults, values schema, and template layout
-> may change without notice between commits. Pin to a specific chart version
-> and review the diff before upgrading. Production use is at your own risk.
-
 ## Charts
 
 | Chart | Description |
