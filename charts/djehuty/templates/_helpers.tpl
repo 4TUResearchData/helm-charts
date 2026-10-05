@@ -28,6 +28,24 @@ the subchart's name template is customized.
 {{- end -}}
 {{- end -}}
 
+{{/*
+Name of the bundled valkey subchart's Service. Mirrors the valkey chart's
+`valkey.fullname` for the default case (`<release>-valkey`); override via
+`valkey.fullnameOverride` if the subchart's name template is customized.
+*/}}
+{{- define "djehuty.valkey.fullname" -}}
+{{- if .Values.valkey.fullnameOverride -}}
+{{- .Values.valkey.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- $name := default "valkey" .Values.valkey.nameOverride -}}
+{{- if contains $name .Release.Name -}}
+{{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "djehuty.labels" -}}
 app.kubernetes.io/name: {{ include "djehuty.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
@@ -103,6 +121,26 @@ Build the full djehuty config dict.
     "auto-migrate-on-boot" (ternary "1" "0" (default false .Values.rdfStore.autoMigrateOnBoot))
 -}}
 {{- $_ := set $cfg "rdf-store" $rdf -}}
+{{- /*
+Shared cache backend. When the valkey subchart is bundled, point djehuty at its
+Service; otherwise djehuty keeps its on-disk file cache (no cache-backend key).
+*/ -}}
+{{- if .Values.valkey.enabled -}}
+  {{- $port := default 6379 (dig "service" "port" 6379 .Values.valkey) -}}
+  {{- $cache := dict
+      "type" "valkey"
+      "host" (include "djehuty.valkey.fullname" .)
+      "port" $port
+      "deployment" (default .Release.Name .Values.cacheBackend.deployment)
+  -}}
+  {{- with .Values.cacheBackend.ttl -}}{{- $_ := set $cache "ttl" (toString .) -}}{{- end -}}
+  {{- /* When the Valkey subchart has auth enabled, djehuty authenticates with the
+         password from an env var (bound from the shared Secret via secrets.env). */ -}}
+  {{- if (dig "auth" "enabled" false .Values.valkey) -}}
+    {{- $_ := set $cache "password" (printf "${env:%s}" (default "VALKEY_PASSWORD" .Values.cacheBackend.passwordEnv)) -}}
+  {{- end -}}
+  {{- $_ := set $cfg "cache-backend" $cache -}}
+{{- end -}}
 {{- /*
 Side-loaded config fragments → djehuty `include:` array.
 Walks config.includes[], emits one absolute path per (ref, key) into the

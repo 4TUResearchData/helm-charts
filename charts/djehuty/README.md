@@ -18,6 +18,11 @@ Features:
 - Bundled SPARQL store via the
   [`virtuoso`](../virtuoso/README.md) subchart (gated by `virtuoso.enabled`).
   Disable to point at an external SPARQL endpoint via `rdfStore.sparqlUri`.
+- Optional shared cache via the official
+  [`valkey`](https://github.com/valkey-io/valkey-helm) subchart (gated by
+  `valkey.enabled`, off by default). When on, djehuty's `cache-backend` is wired
+  to it automatically so multiple instances share one cache; when off, djehuty
+  uses its on-disk file cache.
 - Ingress *and* OpenShift Route templates with cert-manager toggles
   (`*.certManager.{clusterIssuer,issuer}`).
 - Secret handling that keeps sensitive values out of ConfigMaps:
@@ -44,7 +49,7 @@ Features:
    | minikube        | `minikube image load djehuty:dev`                |
    | k3d             | `k3d image import djehuty:dev`                   |
 
-3. Pull the virtuoso subchart, then install:
+3. Pull the subcharts, then install:
 
    ```
    helm dependency update ./charts/djehuty
@@ -216,6 +221,28 @@ To use an external SPARQL store instead:
 --set rdfStore.sparqlUri=http://your-virtuoso/sparql \
 --set rdfStore.stateGraph=https://data.example.com
 ```
+
+## Bundled Valkey (shared cache)
+
+Disabled by default: djehuty uses its on-disk file cache and nothing extra is
+deployed. Enable the official [`valkey`](https://github.com/valkey-io/valkey-helm)
+subchart to run a shared cache so multiple djehuty instances see each other's
+invalidations — the prerequisite for read-scaling behind a load balancer:
+
+```
+--set valkey.enabled=true
+```
+
+The chart wires djehuty's `cache-backend` to the Valkey Service automatically
+(host and port derived from the subchart, plus a per-deployment keyspace
+namespace). Valkey runs as a pure ephemeral cache with `allkeys-lru` eviction:
+the SPARQL store is the source of truth, so losing it means a cold cache, never
+data loss, and djehuty fails open to SPARQL while Valkey is unreachable.
+
+Tune the djehuty-side wiring under `cacheBackend.*` (the keyspace `deployment`
+namespace and an optional `ttl`); anything under `valkey.*` is passed straight
+through to the subchart (see its README for the full schema). Setting a `ttl` is
+recommended when running multiple instances.
 
 ## Authoring config
 

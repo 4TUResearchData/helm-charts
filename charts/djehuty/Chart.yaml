@@ -2,7 +2,7 @@ apiVersion: v2
 name: djehuty
 description: Djehuty research-data repository (4TU.ResearchData) — pre-release, under active development
 type: application
-version: 0.1.13
+version: 0.1.14
 appVersion: "26.7.2"
 annotations:
   artifacthub.io/prerelease: "true"
@@ -25,3 +25,7 @@ dependencies:
     version: "0.1.2"
     repository: "https://4turesearchdata.github.io/helm-charts"
     condition: virtuoso.enabled
+  - name: valkey
+    version: "0.12.0"
+    repository: "https://valkey.io/valkey-helm/"
+    condition: valkey.enabled

@@ -235,6 +235,10 @@ secrets:
     # When `existingSecret` is set, values here are ignored — only the
     # key names matter (they're what the pod's env vars get bound to).
     ORCID_CLIENT_SECRET: ""
+    # Valkey password (only when valkey.auth.enabled — see `valkey.auth`). The
+    # key name must match `cacheBackend.passwordEnv` and the Valkey
+    # `aclUsers.default.passwordKey`, so one Secret serves both sides.
+    # VALKEY_PASSWORD: ""
   files: {}
     # Map of fileName → contents. Mounted at /etc/djehuty/secrets/<fileName>.
     # Reference from config via "${file:/etc/djehuty/secrets/<fileName>}".
@@ -263,6 +267,25 @@ rdfStore:
   # Set to false where operators want to gate schema changes manually.
   autoMigrateOnBoot: true
 
+# -- Shared cache backend. When `valkey.enabled` is true, djehuty is configured
+# to use the bundled Valkey as its cache backend; the host is auto-derived from
+# the Valkey subchart's Service, so an invalidation on one djehuty instance is
+# visible to all. When false, djehuty uses its on-disk file cache (the default)
+# and this section is ignored.
+cacheBackend:
+  # -- Per-deployment Valkey keyspace namespace, so one Valkey can host several
+  # deployments without their invalidations colliding. Empty = use the release name.
+  deployment: ""
+  # -- Optional TTL (seconds) backstop for cache entries. Empty = no expiry
+  # (matches the file cache). Recommended when running multiple djehuty instances.
+  ttl: ""
+  # -- Env var carrying the Valkey password. When the Valkey subchart has auth
+  # enabled (`valkey.auth.enabled`), djehuty's cache-backend password is set to
+  # `${env:<passwordEnv>}`, resolved at startup from this env var. Bind it from a
+  # Secret via `secrets.env` (below) so the same password reaches both djehuty and
+  # Valkey. No effect when `valkey.auth.enabled` is false.
+  passwordEnv: "VALKEY_PASSWORD"
+
 # -- Bundled Virtuoso subchart (charts/virtuoso). Disable to use an
 # externally-managed SPARQL store via `rdfStore` above. Anything under
 # `virtuoso.*` is passed straight to the virtuoso subchart — see its
@@ -281,3 +304,36 @@ virtuoso:
       GRANT SPARQL_UPDATE TO "SPARQL";
       GRANT EXECUTE ON "DB.DBA.SPARQL_INSERT_DICT_CONTENT" TO "SPARQL";
       GRANT EXECUTE ON "DB.DBA.L_O_LOOK" TO "SPARQL";
+
+# -- Bundled Valkey subchart (the official valkey-io/valkey chart). Provides the
+# shared cache backend for multi-instance deployments; disabled by default, so
+# djehuty uses its on-disk file cache unless you turn this on (and wire it via
+# `cacheBackend` above). Anything under `valkey.*` is passed straight to the
+# valkey subchart — see its values.yaml for the full schema. Valkey is a pure
+# cache (the SPARQL store is the source of truth), so it runs ephemerally
+# (dataStorage disabled) as a single standalone pod by default; losing it means
+# a cold cache, never data loss.
+valkey:
+  enabled: false
+  # -- valkey.conf fragment. Eviction is mandatory: djehuty's version-bump cache
+  # invalidation leaves orphaned key generations that allkeys-lru reclaims.
+  valkeyConfig: |
+    maxmemory 256mb
+    maxmemory-policy allkeys-lru
+  # -- Authentication (optional). Off by default. To require a password between
+  # djehuty and Valkey, (1) put the password in a Secret key named by
+  # `cacheBackend.passwordEnv` (e.g. add `VALKEY_PASSWORD` under `secrets.env`
+  # below, or use `secrets.existingSecret`), and (2) enable + point Valkey at that
+  # same Secret so both sides share one password:
+  #
+  # auth:
+  #   enabled: true
+  #   # The djehuty Secret that secrets.env renders (<release>-djehuty-secrets).
+  #   usersExistingSecret: "{{ .Release.Name }}-djehuty-secrets"
+  #   aclUsers:
+  #     default:
+  #       permissions: "~* &* +@all"
+  #       passwordKey: "VALKEY_PASSWORD"   # must match cacheBackend.passwordEnv
+  #
+  # When `auth.enabled` is true the chart automatically sets djehuty's
+  # cache-backend password to `${env:VALKEY_PASSWORD}`.
