@@ -1,0 +1,9 @@
+# Chart-testing input exercising the optional Valkey shared cache: djehuty +
+# bundled virtuoso + bundled valkey, with cache-backend wired to the Valkey
+# Service. Same non-production shape as test-values.yaml (see its header).
+config:
+  production: "0"
+  debug-mode: "1"
+
+valkey:
+  enabled: true

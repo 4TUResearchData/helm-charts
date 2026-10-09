@@ -1,0 +1,26 @@
+{{- if and .Values.scaling.enabled .Values.scaling.readers.autoscaling.enabled }}
+{{- if not (dig "requests" "cpu" "" .Values.scaling.readers.resources) }}
+{{- fail "scaling.readers.autoscaling needs a CPU request: the HPA scales on CPU utilization, which Kubernetes cannot compute without one, so it would report <unknown> and never scale. Set scaling.readers.resources.requests.cpu (e.g. 500m)." }}
+{{- end }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "djehuty.readers.fullname" . }}
+  labels:
+    {{- include "djehuty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: readers
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "djehuty.readers.fullname" . }}
+  minReplicas: {{ .Values.scaling.readers.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.scaling.readers.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.scaling.readers.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

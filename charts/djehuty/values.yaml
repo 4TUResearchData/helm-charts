@@ -5,13 +5,53 @@
 image:
   repository: ghcr.io/4turesearchdata/djehuty
   # -- Image tag. When empty, falls back to `.Chart.AppVersion` (currently
-  # "26.2"). Override here to pin a different upstream djehuty version.
-  tag: "26.7.2"
+  # "26.8"). Override here to pin a different upstream djehuty version.
+  tag: "26.8"
   pullPolicy: IfNotPresent
 
-# -- Number of djehuty replicas. Keep at 1 for now: djehuty stores cache on
-# the data PVC and that PVC is ReadWriteOnce by default.
+# -- Number of djehuty (writer) replicas. Keep at 1: djehuty's writes use
+# per-process locks and git lives on the local /data PVC, so there is exactly
+# one writer. Add read capacity with `scaling` below, not by raising this.
 replicaCount: 1
+
+# -- Optional read-scale topology. Disabled (default) → a single djehuty instance
+# exactly as before. Enabled → the existing Deployment becomes the **writer**
+# (writes + file downloads/thumbnails/IIIF/git + login/admin), and a pool of
+# **stateless readers** serves public pages, API GETs and search. An in-cluster
+# nginx **edge** routes each request to the right pool; the Ingress/Route point at
+# the edge. Readers hold no state (no /data volume), so this needs **no RWX and no
+# storage migration** — just add replicas. Requires the shared Valkey cache
+# (`valkey.enabled: true`) so every pod sees the same cache.
+scaling:
+  enabled: false
+  readers:
+    replicaCount: 2
+    # -- Autoscale the readers on CPU. When enabled, `replicaCount` is ignored
+    # and a HorizontalPodAutoscaler manages the reader count.
+    autoscaling:
+      enabled: false
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+    # -- Reader pod resources. Autoscaling scales on CPU utilization, so enabling
+    # it REQUIRES a CPU request here — the chart refuses to render otherwise.
+    # e.g. requests: {cpu: 500m, memory: 512Mi}
+    resources: {}
+  # -- The in-cluster nginx edge (reverse proxy) that routes writer vs readers.
+  edge:
+    image:
+      # nginx's own unprivileged image (non-root, listens on 8080) so it runs
+      # under OpenShift SCC / runAsNonRoot without extra config.
+      repository: nginxinc/nginx-unprivileged
+      tag: "1.27-alpine"
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    resources: {}
+    # -- Max upload size that passes through the edge to the writer.
+    clientMaxBodySize: "5g"
+    timeouts:
+      proxyRead: "300s"
+      proxySend: "300s"
 
 # -- Pod-level securityContext. Empty by default so OpenShift's SCC can
 # assign runAsUser/fsGroup from the namespace's range. For non-OpenShift
@@ -99,11 +139,18 @@ route:
       clusterIssuer: ""    # e.g. "letsencrypt-prod"
       issuer: ""           # e.g. "internal-ca" (in this namespace)
 
-# -- Persistent volume for djehuty's /data (cache, storage-root).
+# -- Persistent volume for djehuty's /data (cache, storage-root, git repos).
 persistence:
   enabled: true
   size: 5Gi
   storageClass: ""
+  # -- Access mode for the /data PVC. Empty = auto: ReadWriteOnce for a single
+  # instance, ReadWriteMany when `scaling.enabled` (the writer and every reader
+  # mount the same volume). Set explicitly only to force a value or to match a
+  # CSI driver that spells RWX differently. Scaling needs a StorageClass that
+  # provides RWX — without one the PVC never binds and the pods stay Pending
+  # (a loud, obvious failure).
+  accessMode: ""
 
 # -- Non-sensitive configuration. Rendered into a ConfigMap and mounted at
 # /etc/djehuty/config.json. Sensitive values use ${env:NAME} or ${file:/path}
@@ -235,6 +282,10 @@ secrets:
     # When `existingSecret` is set, values here are ignored — only the
     # key names matter (they're what the pod's env vars get bound to).
     ORCID_CLIENT_SECRET: ""
+    # Valkey password (only when valkey.auth.enabled — see `valkey.auth`). The
+    # key name must match `cacheBackend.passwordEnv` and the Valkey
+    # `aclUsers.default.passwordKey`, so one Secret serves both sides.
+    # VALKEY_PASSWORD: ""
   files: {}
     # Map of fileName → contents. Mounted at /etc/djehuty/secrets/<fileName>.
     # Reference from config via "${file:/etc/djehuty/secrets/<fileName>}".
@@ -263,6 +314,25 @@ rdfStore:
   # Set to false where operators want to gate schema changes manually.
   autoMigrateOnBoot: true
 
+# -- Shared cache backend. When `valkey.enabled` is true, djehuty is configured
+# to use the bundled Valkey as its cache backend; the host is auto-derived from
+# the Valkey subchart's Service, so an invalidation on one djehuty instance is
+# visible to all. When false, djehuty uses its on-disk file cache (the default)
+# and this section is ignored.
+cacheBackend:
+  # -- Per-deployment Valkey keyspace namespace, so one Valkey can host several
+  # deployments without their invalidations colliding. Empty = use the release name.
+  deployment: ""
+  # -- Optional TTL (seconds) backstop for cache entries. Empty = no expiry
+  # (matches the file cache). Recommended when running multiple djehuty instances.
+  ttl: ""
+  # -- Env var carrying the Valkey password. When the Valkey subchart has auth
+  # enabled (`valkey.auth.enabled`), djehuty's cache-backend password is set to
+  # `${env:<passwordEnv>}`, resolved at startup from this env var. Bind it from a
+  # Secret via `secrets.env` (below) so the same password reaches both djehuty and
+  # Valkey. No effect when `valkey.auth.enabled` is false.
+  passwordEnv: "VALKEY_PASSWORD"
+
 # -- Bundled Virtuoso subchart (charts/virtuoso). Disable to use an
 # externally-managed SPARQL store via `rdfStore` above. Anything under
 # `virtuoso.*` is passed straight to the virtuoso subchart — see its
@@ -281,3 +351,49 @@ virtuoso:
       GRANT SPARQL_UPDATE TO "SPARQL";
       GRANT EXECUTE ON "DB.DBA.SPARQL_INSERT_DICT_CONTENT" TO "SPARQL";
       GRANT EXECUTE ON "DB.DBA.L_O_LOOK" TO "SPARQL";
+
+# -- Bundled Valkey subchart (the official valkey-io/valkey chart). Provides the
+# shared cache backend for multi-instance deployments; enabled by default and
+# wired to djehuty via `cacheBackend` above (set `enabled: false` to fall back
+# to djehuty's on-disk file cache). Anything under `valkey.*` is passed straight
+# to the valkey subchart — see its values.yaml for the full schema. Valkey is a
+# pure cache (the SPARQL store is the source of truth), so it runs ephemerally
+# (dataStorage disabled) as a single standalone pod by default; losing it means
+# a cold cache, never data loss.
+valkey:
+  enabled: true
+  # The valkey subchart pins runAsUser/runAsGroup/fsGroup to 1000. OpenShift's
+  # restricted-v2 SCC assigns those from the namespace's range and REJECTS a pod
+  # that pins its own — the Deployment is created but no pod is ever admitted
+  # (FailedCreate), so valkey silently never comes up. Null them so the platform
+  # injects valid IDs (the rest of the hardening — drop ALL caps, no privilege
+  # escalation, read-only rootfs, runAsNonRoot, RuntimeDefault seccomp — stays).
+  # Matches the empty securityContext the djehuty/virtuoso pods already use here.
+  podSecurityContext:
+    runAsUser: null
+    runAsGroup: null
+    fsGroup: null
+  securityContext:
+    runAsUser: null
+  # -- valkey.conf fragment. Eviction is mandatory: djehuty's version-bump cache
+  # invalidation leaves orphaned key generations that allkeys-lru reclaims.
+  valkeyConfig: |
+    maxmemory 256mb
+    maxmemory-policy allkeys-lru
+  # -- Authentication (optional). Off by default. To require a password between
+  # djehuty and Valkey, (1) put the password in a Secret key named by
+  # `cacheBackend.passwordEnv` (e.g. add `VALKEY_PASSWORD` under `secrets.env`
+  # below, or use `secrets.existingSecret`), and (2) enable + point Valkey at that
+  # same Secret so both sides share one password:
+  #
+  # auth:
+  #   enabled: true
+  #   # The djehuty Secret that secrets.env renders (<release>-djehuty-secrets).
+  #   usersExistingSecret: "{{ .Release.Name }}-djehuty-secrets"
+  #   aclUsers:
+  #     default:
+  #       permissions: "~* &* +@all"
+  #       passwordKey: "VALKEY_PASSWORD"   # must match cacheBackend.passwordEnv
+  #
+  # When `auth.enabled` is true the chart automatically sets djehuty's
+  # cache-backend password to `${env:VALKEY_PASSWORD}`.

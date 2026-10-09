@@ -1,34 +1,32 @@
 {{- if .Values.scaling.enabled }}
-{{- if not .Values.valkey.enabled }}
-{{- fail "scaling.enabled requires valkey.enabled=true: every djehuty pod must share one cache, and it needs a djehuty image built with the shared-cache (Valkey) backend. Set valkey.enabled=true." }}
-{{- end }}
-{{- if not .Values.persistence.enabled }}
-{{- fail "scaling.enabled requires persistence.enabled=true: the writer and readers serve files from one shared ReadWriteMany /data volume. Set persistence.enabled=true (with a StorageClass that provides RWX)." }}
-{{- end }}
-{{- end }}
+{{- /*
+Reader pool. Serves public pages, API GETs, search, file downloads and
+thumbnails. Mounts the writer's /data (ReadWriteMany) so it can stream stored
+files and read generated thumbnails; it never runs --initialize (the writer
+owns first-boot and store migration). git stays on the writer (the sole git
+writer), and the edge routes writes + session paths there too, so a reader only
+ever writes transient boot scratch under /data — never a shared dataset or repo.
+*/ -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "djehuty.fullname" . }}
-  labels: {{- include "djehuty.labels" . | nindent 4 }}
+  name: {{ include "djehuty.readers.fullname" . }}
+  labels:
+    {{- include "djehuty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: readers
 spec:
-  replicas: {{ .Values.replicaCount }}
-  strategy:
-    type: Recreate  # Singleton writer: never run two at once (per-process locks,
-                    # sole git writer). Also required for RWO /data when not scaling.
+  {{- if not .Values.scaling.readers.autoscaling.enabled }}
+  replicas: {{ .Values.scaling.readers.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "djehuty.selectorLabels" . | nindent 6 }}
-      {{- if .Values.scaling.enabled }}
-      app.kubernetes.io/component: writer
-      {{- end }}
+      app.kubernetes.io/component: readers
   template:
     metadata:
       labels:
         {{- include "djehuty.selectorLabels" . | nindent 8 }}
-        {{- if .Values.scaling.enabled }}
-        app.kubernetes.io/component: writer
-        {{- end }}
+        app.kubernetes.io/component: readers
       annotations:
         checksum/config: {{ include "djehuty.configJson" . | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
@@ -43,23 +41,11 @@ spec:
           {{- with .Values.securityContext }}
           securityContext: {{- toYaml . | nindent 12 }}
           {{- end }}
-          # Mirrors docker/dev-entrypoint.sh: touch the marker BEFORE running
-          # djehuty (it never exits after --initialize, it continues into the
-          # web server), so the next restart skips --initialize.
+          # Readers never initialize or migrate; the writer does. They just serve.
           command:
             - /bin/sh
             - -c
-            - |
-              set -e
-              INIT=""
-              {{- if .Values.initialize }}
-              MARKER=/data/.initialized
-              if [ ! -f "$MARKER" ]; then
-                INIT="--initialize"
-                touch "$MARKER"
-              fi
-              {{- end }}
-              exec /usr/bin/djehuty web $INIT --config-file /etc/djehuty/config.json
+            - exec /usr/bin/djehuty web --config-file /etc/djehuty/config.json
           env:
             {{- range $k, $_ := .Values.secrets.env }}
             - name: {{ $k }}
@@ -71,17 +57,6 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          # Probe the homepage: a real "djehuty can serve and reach the store"
-          # health check (a DB problem surfaces as an unhealthy pod, which is
-          # what we want to see). The only catch is the first render after each
-          # start, when djehuty recomputes repository_statistics cold (cache is
-          # cleared on boot) — slow on a large store. timeoutSeconds +
-          # failureThreshold give that one-time warm-up enough room to finish and
-          # cache before the probe fails the pod; every subsequent hit is fast.
-          # (X-Forwarded-For: kubelet hits the pod directly, bypassing the Router
-          # that would inject it; djehuty.web.wsgi logs ERROR per probe when
-          # use-x-forwarded-for is on — the synthetic 127.0.0.1 silences it and
-          # is harmless when off.)
           readinessProbe:
             httpGet:
               path: /
@@ -104,6 +79,9 @@ spec:
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 6
+          {{- with .Values.scaling.readers.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
           volumeMounts:
             - name: config
               mountPath: /etc/djehuty/config.json
@@ -113,15 +91,11 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
-            {{- /* Side-loaded config fragments (config.includes[]). One mount per
-                   reference, under /etc/djehuty/config.d/<refName>/. djehuty's
-                   loader walks `include:` entries in the rendered config.json. */}}
             {{- range $idx, $inc := default (list) .Values.config.includes }}
             - name: {{ printf "config-include-%d" $idx }}
               mountPath: /etc/djehuty/config.d/{{ default $inc.secret $inc.configMap }}
               readOnly: true
             {{- end }}
-      {{- if or .Values.virtuoso.enabled .Values.valkey.enabled }}
       initContainers:
         {{- if .Values.virtuoso.enabled }}
         - name: wait-for-virtuoso
@@ -132,9 +106,8 @@ spec:
             - "until nc -z {{ include "djehuty.virtuoso.fullname" . }} {{ default 8890 (dig "service" "port" 8890 .Values.virtuoso) }}; do echo waiting for virtuoso; sleep 2; done"
         {{- end }}
         {{- if .Values.valkey.enabled }}
-        # Shared cache: wait for Valkey so djehuty warms the cache instead of a
-        # cold-start SPARQL storm (the backend degrades to SPARQL if it's down,
-        # so this is a clean-startup gate, not a hard dependency).
+        # Shared cache: wait for Valkey before serving (degrades to SPARQL if
+        # down, so this is a clean-startup gate, not a hard dependency).
         - name: wait-for-valkey
           image: busybox:1.36
           command:
@@ -142,7 +115,15 @@ spec:
             - -c
             - "until nc -z {{ include "djehuty.valkey.fullname" . }} {{ default 6379 (dig "service" "port" 6379 .Values.valkey) }}; do echo waiting for valkey; sleep 2; done"
         {{- end }}
-      {{- end }}
+        # Wait for the writer to be Ready (its Service only has endpoints once it
+        # has initialized + migrated the store), so readers never serve against an
+        # un-migrated store.
+        - name: wait-for-writer
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "until nc -z {{ include "djehuty.fullname" . }} {{ .Values.service.port }}; do echo waiting for writer; sleep 2; done"
       volumes:
         - name: config
           configMap:
@@ -150,6 +131,10 @@ spec:
         - name: secret-files
           secret:
             secretName: {{ include "djehuty.secretName" . }}
+        # Shared /data: the writer's ReadWriteMany PVC, so readers stream stored
+        # files and read thumbnails. Mounted read-write because djehuty writes
+        # boot scratch here; git repos are never written by a reader (edge-routed
+        # to the writer). Mirrors the writer's volume (emptyDir if no persistence).
         - name: data
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
@@ -177,3 +162,4 @@ spec:
               {{- end }}
           {{- end }}
         {{- end }}
+{{- end }}

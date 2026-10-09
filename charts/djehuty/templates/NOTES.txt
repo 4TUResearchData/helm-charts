@@ -1,7 +1,20 @@
 djehuty installed as release: {{ .Release.Name }}
+{{ if .Values.scaling.enabled }}
+Running SCALED (read-scale topology):
+  • writer:  Deployment {{ include "djehuty.fullname" . }}  (1 pod — writes, git, IIIF, login/admin/review)
+  • readers: Deployment {{ include "djehuty.readers.fullname" . }}  ({{ if .Values.scaling.readers.autoscaling.enabled }}autoscaled {{ .Values.scaling.readers.autoscaling.minReplicas }}–{{ .Values.scaling.readers.autoscaling.maxReplicas }}{{ else }}{{ .Values.scaling.readers.replicaCount }} replicas{{ end }} — public pages, API GETs, search, file downloads, thumbnails)
+  • edge:    Deployment {{ include "djehuty.edge.fullname" . }}  (nginx router; the front door)
 
+  writer + readers share one ReadWriteMany /data volume (needs an RWX StorageClass).
+
+Scale the read capacity:
+  kubectl scale deployment {{ include "djehuty.readers.fullname" . }} --replicas=N
+{{- if not .Values.scaling.readers.autoscaling.enabled }}
+  (or set scaling.readers.autoscaling.enabled=true to autoscale on CPU)
+{{- end }}
+{{ end }}
 Reach djehuty:
-  kubectl port-forward svc/{{ include "djehuty.fullname" . }} 8080:{{ .Values.service.port }}
+  kubectl port-forward svc/{{ include "djehuty.frontendServiceName" . }} 8080:{{ .Values.service.port }}
   open http://localhost:8080
 {{ if .Values.virtuoso.enabled }}
 Virtuoso SPARQL endpoint (in-cluster):

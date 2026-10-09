@@ -1,0 +1,18 @@
+{{- if .Values.scaling.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "djehuty.edge.fullname" . }}
+  labels:
+    {{- include "djehuty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: edge
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "djehuty.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: edge
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+{{- end }}
