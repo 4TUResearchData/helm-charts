@@ -7,11 +7,6 @@ This chart lives in [4TUResearchData/helm-charts](https://github.com/4TUResearch
 see the top-level [README](../../README.md) for the chart repo overview and
 the [CONTRIBUTING guide](../../CONTRIBUTING.md) for local development.
 
-> [!WARNING]
-> **Development phase.** This chart is pre-1.0 and under active
-> development. Values, templates, and defaults may change between commits.
-> Pin to a specific version and review release notes before upgrading.
-
 Features:
 - djehuty Deployment with persistent `/data` and in-pod first-time
   `--initialize`.
