@@ -5,7 +5,11 @@ metadata:
   name: {{ include "djehuty.fullname" . }}-data
   labels: {{- include "djehuty.labels" . | nindent 4 }}
 spec:
-  accessModes: ["ReadWriteOnce"]
+  {{- /* Scaling mounts this one PVC on the writer AND every reader, so it needs
+         ReadWriteMany; single-instance keeps ReadWriteOnce. Override explicitly
+         with persistence.accessMode (e.g. a CSI that names RWX differently). */}}
+  accessModes:
+    - {{ .Values.persistence.accessMode | default (ternary "ReadWriteMany" "ReadWriteOnce" .Values.scaling.enabled) }}
   resources:
     requests:
       storage: {{ .Values.persistence.size }}

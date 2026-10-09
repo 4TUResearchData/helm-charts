@@ -244,6 +244,51 @@ namespace and an optional `ttl`); anything under `valkey.*` is passed straight
 through to the subchart (see its README for the full schema). Setting a `ttl` is
 recommended when running multiple instances.
 
+## Read-scale topology
+
+Disabled by default (single instance). Enable it to run djehuty behind a load
+balancer as **one writer + N stateless readers**, fronted by an in-cluster nginx
+**edge** that routes by request:
+
+```
+--set scaling.enabled=true --set valkey.enabled=true
+```
+
+- **writer** — the existing Deployment (`<release>-djehuty`, 1 pod). Handles all
+  writes, git, IIIF (it writes a derivative cache at serve time), profile images
+  and the depositor/admin/review/login surface.
+- **readers** — `<release>-djehuty-readers`, the scalable pool. Serves public
+  pages, API `GET`s, search **and file downloads + thumbnails**. Add capacity by
+  raising `scaling.readers.replicaCount` or enabling `scaling.readers.autoscaling`.
+- **edge** — `<release>-djehuty-edge`, a small nginx (the Ingress/Route point at
+  it) that sends writes, git, IIIF and session paths to the writer and everything
+  else — including downloads — to the readers. Works the same on Ingress and
+  OpenShift Route (method routing a Route can't express).
+
+To serve files from the readers, the writer and readers **share one `/data`
+volume**, so scaling switches the PVC to **ReadWriteMany** (`persistence.accessMode`
+auto-selects it; override to force). git repos are only ever written by the single
+writer, so the shared-filesystem hazard is avoided by routing, not by access mode.
+
+Requirements:
+
+- `valkey.enabled=true` — all pods share one cache; the chart refuses to start
+  otherwise. Also needs a djehuty image built with the shared-cache backend.
+- `persistence.enabled=true` on a StorageClass that provides **ReadWriteMany**.
+  Without an RWX class the `/data` PVC never binds and the pods stay `Pending` —
+  a loud, obvious failure.
+
+TLS is unchanged — it still terminates at the ingress controller / router (the
+edge is in-cluster HTTP).
+
+```
+kubectl scale deployment <release>-djehuty-readers --replicas=4   # add readers
+```
+
+File downloads scale across readers; IIIF and git stay on the single writer.
+True download isolation per node and git-on-dedicated-disk are the object-storage
+(S3) path, still the north star.
+
 ## Authoring config
 
 Everything under `config:` is rendered to `/etc/djehuty/config.json`.

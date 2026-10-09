@@ -46,6 +46,27 @@ Name of the bundled valkey subchart's Service. Mirrors the valkey chart's
 {{- end -}}
 {{- end -}}
 
+{{/* Names for the scaling roles. */}}
+{{- define "djehuty.edge.fullname" -}}
+{{- printf "%s-edge" (include "djehuty.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "djehuty.readers.fullname" -}}
+{{- printf "%s-readers" (include "djehuty.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Service the Ingress / OpenShift Route send traffic to: the nginx edge when
+scaling is enabled (it routes writer vs readers), otherwise djehuty directly.
+*/}}
+{{- define "djehuty.frontendServiceName" -}}
+{{- if .Values.scaling.enabled -}}
+{{- include "djehuty.edge.fullname" . -}}
+{{- else -}}
+{{- include "djehuty.fullname" . -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "djehuty.labels" -}}
 app.kubernetes.io/name: {{ include "djehuty.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
