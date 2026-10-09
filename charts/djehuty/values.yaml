@@ -33,6 +33,9 @@ scaling:
       minReplicas: 2
       maxReplicas: 6
       targetCPUUtilizationPercentage: 70
+    # -- Reader pod resources. Autoscaling scales on CPU utilization, so enabling
+    # it REQUIRES a CPU request here — the chart refuses to render otherwise.
+    # e.g. requests: {cpu: 500m, memory: 512Mi}
     resources: {}
   # -- The in-cluster nginx edge (reverse proxy) that routes writer vs readers.
   edge:

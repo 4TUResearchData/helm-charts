@@ -1,4 +1,7 @@
 {{- if and .Values.scaling.enabled .Values.scaling.readers.autoscaling.enabled }}
+{{- if not (dig "requests" "cpu" "" .Values.scaling.readers.resources) }}
+{{- fail "scaling.readers.autoscaling needs a CPU request: the HPA scales on CPU utilization, which Kubernetes cannot compute without one, so it would report <unknown> and never scale. Set scaling.readers.resources.requests.cpu (e.g. 500m)." }}
+{{- end }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

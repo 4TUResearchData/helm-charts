@@ -15,6 +15,10 @@ data:
     map $request_method $djehuty_is_write { default 1; GET 0; HEAD 0; OPTIONS 0; }
     # Preserve the scheme the ingress controller / router saw (https), else $scheme.
     map $http_x_forwarded_proto $djehuty_fwd_proto { default $http_x_forwarded_proto; "" $scheme; }
+    # Preserve the client IP the ingress / router already recorded; only synthesize
+    # one for direct hits (no upstream XFF). Appending our own hop here would add an
+    # internal IP to djehuty's stored download/view log, so pass the value through.
+    map $http_x_forwarded_for $djehuty_xff { default $http_x_forwarded_for; "" $remote_addr; }
 
     server {
         listen 8080;
@@ -23,7 +27,7 @@ data:
         proxy_send_timeout {{ .Values.scaling.edge.timeouts.proxySend }};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For $djehuty_xff;
         proxy_set_header X-Forwarded-Proto $djehuty_fwd_proto;
         proxy_set_header X-Forwarded-Host $http_x_forwarded_host;
 
