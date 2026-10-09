@@ -105,6 +105,16 @@ spec:
             - -c
             - "until nc -z {{ include "djehuty.virtuoso.fullname" . }} {{ default 8890 (dig "service" "port" 8890 .Values.virtuoso) }}; do echo waiting for virtuoso; sleep 2; done"
         {{- end }}
+        {{- if .Values.valkey.enabled }}
+        # Shared cache: wait for Valkey before serving (degrades to SPARQL if
+        # down, so this is a clean-startup gate, not a hard dependency).
+        - name: wait-for-valkey
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "until nc -z {{ include "djehuty.valkey.fullname" . }} {{ default 6379 (dig "service" "port" 6379 .Values.valkey) }}; do echo waiting for valkey; sleep 2; done"
+        {{- end }}
         # Wait for the writer to be Ready (its Service only has endpoints once it
         # has initialized + migrated the store), so readers never serve against an
         # un-migrated store.

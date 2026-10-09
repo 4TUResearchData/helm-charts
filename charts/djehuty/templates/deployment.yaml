@@ -121,14 +121,27 @@ spec:
               mountPath: /etc/djehuty/config.d/{{ default $inc.secret $inc.configMap }}
               readOnly: true
             {{- end }}
-      {{- if .Values.virtuoso.enabled }}
+      {{- if or .Values.virtuoso.enabled .Values.valkey.enabled }}
       initContainers:
+        {{- if .Values.virtuoso.enabled }}
         - name: wait-for-virtuoso
           image: busybox:1.36
           command:
             - sh
             - -c
             - "until nc -z {{ include "djehuty.virtuoso.fullname" . }} {{ default 8890 (dig "service" "port" 8890 .Values.virtuoso) }}; do echo waiting for virtuoso; sleep 2; done"
+        {{- end }}
+        {{- if .Values.valkey.enabled }}
+        # Shared cache: wait for Valkey so djehuty warms the cache instead of a
+        # cold-start SPARQL storm (the backend degrades to SPARQL if it's down,
+        # so this is a clean-startup gate, not a hard dependency).
+        - name: wait-for-valkey
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "until nc -z {{ include "djehuty.valkey.fullname" . }} {{ default 6379 (dig "service" "port" 6379 .Values.valkey) }}; do echo waiting for valkey; sleep 2; done"
+        {{- end }}
       {{- end }}
       volumes:
         - name: config
