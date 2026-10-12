@@ -5,8 +5,31 @@ metadata:
   labels: {{- include "djehuty.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
-  selector: {{- include "djehuty.selectorLabels" . | nindent 4 }}
+  selector:
+    {{- include "djehuty.selectorLabels" . | nindent 4 }}
+    {{- if .Values.scaling.enabled }}
+    app.kubernetes.io/component: writer
+    {{- end }}
   ports:
     - name: http
       port: {{ .Values.service.port }}
       targetPort: http
+{{- if .Values.scaling.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "djehuty.readers.fullname" . }}
+  labels:
+    {{- include "djehuty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: readers
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "djehuty.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: readers
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+{{- end }}

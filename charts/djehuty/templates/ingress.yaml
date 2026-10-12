@@ -36,7 +36,7 @@ spec:
             pathType: {{ .pathType | default "Prefix" }}
             backend:
               service:
-                name: {{ include "djehuty.fullname" $ }}
+                name: {{ include "djehuty.frontendServiceName" $ }}
                 port:
                   number: {{ $.Values.service.port }}
           {{- end }}

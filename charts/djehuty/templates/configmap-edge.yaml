@@ -1,0 +1,52 @@
+{{- if .Values.scaling.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "djehuty.edge.fullname" . }}
+  labels:
+    {{- include "djehuty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: edge
+data:
+  default.conf: |
+    upstream djehuty_writer  { server {{ include "djehuty.fullname" . }}:{{ .Values.service.port }}; }
+    upstream djehuty_readers { server {{ include "djehuty.readers.fullname" . }}:{{ .Values.service.port }}; }
+
+    # Writes (any non-GET) go to the writer; reads to the readers.
+    map $request_method $djehuty_is_write { default 1; GET 0; HEAD 0; OPTIONS 0; }
+    # Preserve the scheme the ingress controller / router saw (https), else $scheme.
+    map $http_x_forwarded_proto $djehuty_fwd_proto { default $http_x_forwarded_proto; "" $scheme; }
+    # Preserve the client IP the ingress / router already recorded; only synthesize
+    # one for direct hits (no upstream XFF). Appending our own hop here would add an
+    # internal IP to djehuty's stored download/view log, so pass the value through.
+    map $http_x_forwarded_for $djehuty_xff { default $http_x_forwarded_for; "" $remote_addr; }
+
+    server {
+        listen 8080;
+        client_max_body_size {{ .Values.scaling.edge.clientMaxBodySize }};
+        proxy_read_timeout {{ .Values.scaling.edge.timeouts.proxyRead }};
+        proxy_send_timeout {{ .Values.scaling.edge.timeouts.proxySend }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $djehuty_xff;
+        proxy_set_header X-Forwarded-Proto $djehuty_fwd_proto;
+        proxy_set_header X-Forwarded-Host $http_x_forwarded_host;
+
+        # File downloads + thumbnails are reads of the shared /data → readers.
+        location ~ ^/(file|ndownloader|thumbnails)/ { proxy_pass http://djehuty_readers; }
+        # IIIF writes its derivative cache at serve time; keep it on the single
+        # writer so concurrent readers can't race on the same cache file.
+        location ~ ^/iiif/                           { proxy_pass http://djehuty_writer; }
+        # git repos are written only by the writer (the sole git writer).
+        location ~ ^/v3/datasets/[^/]+\.git          { proxy_pass http://djehuty_writer; }
+        location ~ ^/v3/profile/picture              { proxy_pass http://djehuty_writer; }
+        # Sessions, depositor, admin and review → writer.
+        location ~ ^/(my|admin|review|login|logout|saml|account)(/|$) { proxy_pass http://djehuty_writer; }
+        # Read-only search stays on the readers (it is a POST but a read).
+        location ~ /search$ { proxy_pass http://djehuty_readers; }
+        # Default: writes → writer, everything else → readers.
+        location / {
+            if ($djehuty_is_write) { proxy_pass http://djehuty_writer; }
+            proxy_pass http://djehuty_readers;
+        }
+    }
+{{- end }}

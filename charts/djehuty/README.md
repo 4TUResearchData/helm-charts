@@ -7,17 +7,17 @@ This chart lives in [4TUResearchData/helm-charts](https://github.com/4TUResearch
 see the top-level [README](../../README.md) for the chart repo overview and
 the [CONTRIBUTING guide](../../CONTRIBUTING.md) for local development.
 
-> [!WARNING]
-> **Development phase.** This chart is pre-1.0 and under active
-> development. Values, templates, and defaults may change between commits.
-> Pin to a specific version and review release notes before upgrading.
-
 Features:
 - djehuty Deployment with persistent `/data` and in-pod first-time
   `--initialize`.
 - Bundled SPARQL store via the
   [`virtuoso`](../virtuoso/README.md) subchart (gated by `virtuoso.enabled`).
   Disable to point at an external SPARQL endpoint via `rdfStore.sparqlUri`.
+- Optional shared cache via the official
+  [`valkey`](https://github.com/valkey-io/valkey-helm) subchart (gated by
+  `valkey.enabled`, off by default). When on, djehuty's `cache-backend` is wired
+  to it automatically so multiple instances share one cache; when off, djehuty
+  uses its on-disk file cache.
 - Ingress *and* OpenShift Route templates with cert-manager toggles
   (`*.certManager.{clusterIssuer,issuer}`).
 - Secret handling that keeps sensitive values out of ConfigMaps:
@@ -44,7 +44,7 @@ Features:
    | minikube        | `minikube image load djehuty:dev`                |
    | k3d             | `k3d image import djehuty:dev`                   |
 
-3. Pull the virtuoso subchart, then install:
+3. Pull the subcharts, then install:
 
    ```
    helm dependency update ./charts/djehuty
@@ -216,6 +216,73 @@ To use an external SPARQL store instead:
 --set rdfStore.sparqlUri=http://your-virtuoso/sparql \
 --set rdfStore.stateGraph=https://data.example.com
 ```
+
+## Bundled Valkey (shared cache)
+
+Disabled by default: djehuty uses its on-disk file cache and nothing extra is
+deployed. Enable the official [`valkey`](https://github.com/valkey-io/valkey-helm)
+subchart to run a shared cache so multiple djehuty instances see each other's
+invalidations — the prerequisite for read-scaling behind a load balancer:
+
+```
+--set valkey.enabled=true
+```
+
+The chart wires djehuty's `cache-backend` to the Valkey Service automatically
+(host and port derived from the subchart, plus a per-deployment keyspace
+namespace). Valkey runs as a pure ephemeral cache with `allkeys-lru` eviction:
+the SPARQL store is the source of truth, so losing it means a cold cache, never
+data loss, and djehuty fails open to SPARQL while Valkey is unreachable.
+
+Tune the djehuty-side wiring under `cacheBackend.*` (the keyspace `deployment`
+namespace and an optional `ttl`); anything under `valkey.*` is passed straight
+through to the subchart (see its README for the full schema). Setting a `ttl` is
+recommended when running multiple instances.
+
+## Read-scale topology
+
+Disabled by default (single instance). Enable it to run djehuty behind a load
+balancer as **one writer + N stateless readers**, fronted by an in-cluster nginx
+**edge** that routes by request:
+
+```
+--set scaling.enabled=true --set valkey.enabled=true
+```
+
+- **writer** — the existing Deployment (`<release>-djehuty`, 1 pod). Handles all
+  writes, git, IIIF (it writes a derivative cache at serve time), profile images
+  and the depositor/admin/review/login surface.
+- **readers** — `<release>-djehuty-readers`, the scalable pool. Serves public
+  pages, API `GET`s, search **and file downloads + thumbnails**. Add capacity by
+  raising `scaling.readers.replicaCount` or enabling `scaling.readers.autoscaling`.
+- **edge** — `<release>-djehuty-edge`, a small nginx (the Ingress/Route point at
+  it) that sends writes, git, IIIF and session paths to the writer and everything
+  else — including downloads — to the readers. Works the same on Ingress and
+  OpenShift Route (method routing a Route can't express).
+
+To serve files from the readers, the writer and readers **share one `/data`
+volume**, so scaling switches the PVC to **ReadWriteMany** (`persistence.accessMode`
+auto-selects it; override to force). git repos are only ever written by the single
+writer, so the shared-filesystem hazard is avoided by routing, not by access mode.
+
+Requirements:
+
+- `valkey.enabled=true` — all pods share one cache; the chart refuses to start
+  otherwise. Also needs a djehuty image built with the shared-cache backend.
+- `persistence.enabled=true` on a StorageClass that provides **ReadWriteMany**.
+  Without an RWX class the `/data` PVC never binds and the pods stay `Pending` —
+  a loud, obvious failure.
+
+TLS is unchanged — it still terminates at the ingress controller / router (the
+edge is in-cluster HTTP).
+
+```
+kubectl scale deployment <release>-djehuty-readers --replicas=4   # add readers
+```
+
+File downloads scale across readers; IIIF and git stay on the single writer.
+True download isolation per node and git-on-dedicated-disk are the object-storage
+(S3) path, still the north star.
 
 ## Authoring config
 

@@ -25,7 +25,7 @@ spec:
   {{- end }}
   to:
     kind: Service
-    name: {{ include "djehuty.fullname" . }}
+    name: {{ include "djehuty.frontendServiceName" . }}
     weight: 100
   port:
     targetPort: http
