@@ -362,19 +362,25 @@ virtuoso:
 # a cold cache, never data loss.
 valkey:
   enabled: true
-  # The valkey subchart pins runAsUser/runAsGroup/fsGroup to 1000. OpenShift's
-  # restricted-v2 SCC assigns those from the namespace's range and REJECTS a pod
-  # that pins its own — the Deployment is created but no pod is ever admitted
-  # (FailedCreate), so valkey silently never comes up. Null them so the platform
-  # injects valid IDs (the rest of the hardening — drop ALL caps, no privilege
-  # escalation, read-only rootfs, runAsNonRoot, RuntimeDefault seccomp — stays).
-  # Matches the empty securityContext the djehuty/virtuoso pods already use here.
+  # The valkey subchart pins runAsUser/runAsGroup/fsGroup to 1000 and sets
+  # runAsNonRoot on the container. Two platforms reject that from opposite ends:
+  # OpenShift's restricted-v2 SCC assigns IDs from the namespace range and REJECTS
+  # a pod that pins its own (no pod is ever admitted — FailedCreate), while a
+  # non-OpenShift cluster (e.g. kind in CI) REJECTS runAsNonRoot once the UID is
+  # unset, because the image's default user is root ("container has runAsNonRoot
+  # and image will run as root"). Null all of them so the platform decides:
+  # OpenShift injects a non-root UID and enforces non-root via the SCC regardless,
+  # and elsewhere the image's own user runs — exactly like the empty
+  # securityContext the djehuty/virtuoso pods already use here. The rest of the
+  # hardening (drop ALL caps, no privilege escalation, read-only rootfs,
+  # RuntimeDefault seccomp) stays.
   podSecurityContext:
     runAsUser: null
     runAsGroup: null
     fsGroup: null
   securityContext:
     runAsUser: null
+    runAsNonRoot: null
   # -- valkey.conf fragment. Eviction is mandatory: djehuty's version-bump cache
   # invalidation leaves orphaned key generations that allkeys-lru reclaims.
   valkeyConfig: |
